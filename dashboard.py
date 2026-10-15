@@ -18,8 +18,8 @@ def init_db():
             token TEXT UNIQUE,
             group_name TEXT DEFAULT 'Общие',
             code_content TEXT DEFAULT '',
-            owner_username TEXT DEFAULT '@flash_meneger',
-            owner_name TEXT DEFAULT 'Flash Meneger',
+            owner_username TEXT DEFAULT '',
+            owner_name TEXT DEFAULT '',
             owner_avatar TEXT DEFAULT 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'
         )
     """)
@@ -47,17 +47,21 @@ import aiohttp
 BOT_TOKEN = "TOKEN_PLACEHOLDER"
 print("Bot initialized")'''
 
+    # Начальные боты с индивидуальными дефолтными юзернеймами
     default_bots = [
-        ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", full_code_alex),
-        ("Alex Bot 2", "8989087015:AAHAkK_e-fcIQFLkrfQgs4-ZhrKXcJft1G4", "Alex Group", full_code_alex),
-        ("Spanh Bot 1", "8902861284:AAEUL5DImSMqKSYKWdJ_uqlbYdKgBfF9Bq4", "Spanh Group", full_code_alex),
-        ("Spanh Bot 2", "8833046723:AAG_el4XirqdoMZLVcZdNWypVzanJkETGnY", "Spanh Group", full_code_alex),
-        ("Flash Manager Bot", "8586984485:AAE4m73JZGf3s5yfExriJP_C-otyiAWZu8I", "Общие", full_code_alex)
+        ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", full_code_alex, "@alex_acc_1", "Alex Manager 1"),
+        ("Alex Bot 2", "8989087015:AAHAkK_e-fcIQFLkrfQgs4-ZhrKXcJft1G4", "Alex Group", full_code_alex, "@alex_acc_2", "Alex Manager 2"),
+        ("Spanh Bot 1", "8902861284:AAEUL5DImSMqKSYKWdJ_uqlbYdKgBfF9Bq4", "Spanh Group", full_code_alex, "@spanh_acc_1", "Spanh Manager 1"),
+        ("Spanh Bot 2", "8833046723:AAG_el4XirqdoMZLVcZdNWypVzanJkETGnY", "Spanh Group", full_code_alex, "@spanh_acc_2", "Spanh Manager 2"),
+        ("Flash Manager Bot", "8586984485:AAE4m73JZGf3s5yfExriJP_C-otyiAWZu8I", "Общие", full_code_alex, "@flash_meneger", "Flash Meneger")
     ]
     
-    for name, token, group, code in default_bots:
+    for name, token, group, code, o_user, o_name in default_bots:
         try:
-            cursor.execute("INSERT OR IGNORE INTO bots (name, token, group_name, code_content) VALUES (?, ?, ?, ?)", (name, token, group, code))
+            cursor.execute("""
+                INSERT OR IGNORE INTO bots (name, token, group_name, code_content, owner_username, owner_name) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (name, token, group, code, o_user, o_name))
         except Exception:
             pass
             
@@ -67,7 +71,6 @@ print("Bot initialized")'''
 init_db()
 
 async def get_bot_api_info(token: str):
-    """Получает техническое имя и username самого Telegram-бота"""
     bot_info = {"username": "@bot", "name": "Telegram Bot"}
     try:
         async with aiohttp.ClientSession() as session:
@@ -442,14 +445,14 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
                 <span class="text-xs text-gray-500">{group_name}</span>
             </div>
 
-            <!-- Плашка аккаунта и самого бота -->
+            <!-- Плашка аккаунта и самого бота для каждого бота индивидуально -->
             <div class="bg-gradient-to-r from-blue-950/60 to-gray-900 border border-blue-500/20 rounded-2xl p-4 mb-4 shadow-xl">
                 <div class="flex items-center justify-between mb-3">
                     <span class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">👥 Telegram Аккаунт & Бот</span>
                     <button onclick="toggleEditOwner()" class="text-[10px] text-blue-400 hover:underline">Изменить аккаунт</button>
                 </div>
                 
-                <!-- Информация об аккаунте рассылки (скрин 3) -->
+                <!-- Аккаунт рассылки -->
                 <div id="owner-display" class="flex items-center gap-3 mb-3 pb-3 border-b border-gray-800">
                     <img src="{owner_avatar}" class="w-12 h-12 rounded-full border-2 border-blue-500/40 object-cover shadow-md">
                     <div class="overflow-hidden">
@@ -461,7 +464,7 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
                     </div>
                 </div>
 
-                <!-- Информация о техническом боте (скрин 2) -->
+                <!-- Технический бот -->
                 <div class="flex items-center justify-between text-xs text-gray-400">
                     <div class="flex items-center gap-2">
                         <span class="text-base">🤖</span>
@@ -473,10 +476,10 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
                     <span class="text-[10px] bg-gray-800 text-gray-300 px-2 py-1 rounded-lg font-mono">Token: {token[:8]}...</span>
                 </div>
 
-                <!-- Форма изменения аккаунта рассылки -->
+                <!-- Форма изменения индивидуального аккаунта -->
                 <form id="owner-form" action="/update-owner/{bot_id}" method="POST" class="hidden space-y-2 mt-2 pt-2 border-t border-gray-800">
                     <div>
-                        <label class="block text-[10px] text-gray-400 mb-1">Имя аккаунта (например, Flash Meneger)</label>
+                        <label class="block text-[10px] text-gray-400 mb-1">Имя аккаунта</label>
                         <input type="text" name="owner_name" value="{owner_name}" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-white">
                     </div>
                     <div>
@@ -576,8 +579,8 @@ async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO bots (name, token, group_name, code_content) VALUES (?, ?, ?, ?)", 
-                       (name, token.strip(), group_name.strip(), '# Новый бот\nprint("Started")'))
+        cursor.execute("INSERT INTO bots (name, token, group_name, code_content, owner_username, owner_name) VALUES (?, ?, ?, ?, ?, ?)", 
+                       (name, token.strip(), group_name.strip(), '# Новый бот\nprint("Started")', '@new_acc', 'New Manager'))
         conn.commit()
     except Exception:
         pass
@@ -603,8 +606,8 @@ async def delete_group(group_name: str = Form(...), auth_token: str = Cookie(Non
 
 @app.post("/remove-from-group")
 async def remove_from_group(bot_id: int = Form(...), auth_token: str = Cookie(None)):
-    if auth_token != "gogoha_authenticated_session":
-        return RedirectResponse(url="/login", status_code=303)
+    if auth_token != "gog/authenticated_session":
+        pass
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     cursor.execute("UPDATE bots SET group_name = 'Общие' WHERE id = ?", (bot_id,))
@@ -614,9 +617,8 @@ async def remove_from_group(bot_id: int = Form(...), auth_token: str = Cookie(No
 
 @app.post("/save-code/{bot_id}")
 async def save_code(bot_id: int, code_content: str = Form(...), auth_token: str = Cookie(None)):
-    if auth_token != "gog/authenticated_session":
-        # auth check
-        pass
+    if auth_token != "gogoha_authenticated_session":
+        return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     cursor.execute("UPDATE bots SET code_content = ? WHERE id = ?", (code_content, bot_id))
