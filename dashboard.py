@@ -36,6 +36,7 @@ def init_db():
         )
     """)
 
+    # Полный полноценный рабочий код бота
     full_code_alex = '''import asyncio
 import os
 import random
@@ -45,7 +46,117 @@ from aiohttp import web
 import aiohttp
 
 BOT_TOKEN = "TOKEN_PLACEHOLDER"
-print("Bot initialized")'''
+
+FIRST_STEP_MESSAGES = [
+    "Привет, ты искал работу в тт ?",
+    "привет! ты искал работу в ТТ?",
+]
+
+FINAL_MESSAGE = "Тогда давай я тебе лучше скину ссылку, там ты все увидишь\\n\\nhttps://t.me/+52YuDrXyAok4ODc6"
+
+POSITIVE_KEYWORDS = [
+    "да", "ага", "угу", "ну да", "вроде", "типа", "дап", "даа", "го", "+", 
+    "было дело", "хочу", "просил", "кто", "возможно", "может", "хз", "помню", 
+    "забыл", "какая", "что за", "а что", "зачем", "где", "как", "ищу", "работу",
+    "интересно", "интересуюсь", "можно", "расскажи", "почему бы и нет",
+    "работа", "что за работа", "какая работа", "расскажи подробнее"
+]
+
+NEGATIVE_KEYWORDS = [
+    "нет", "не", "неа", "не-а", "мимо", "нет спасибо", "не интересует", 
+    "нафиг", "пошел", "отвали", "не искал", "никакой"
+]
+
+user_stages = {}
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+async def handle_ping(request):
+    return web.Response(text="Bot is active")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"🌐 Веб-сервер запущен на порту {port}")
+
+async def self_ping():
+    render_url = os.environ.get("RENDER_EXTERNAL_URL", "")
+    if not render_url:
+        return
+    await asyncio.sleep(15)
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(render_url) as response:
+                    print(f"[PINGS] Статус: {response.status}")
+            except Exception as e:
+                print(f"[PINGS] Ошибка: {e}")
+            await asyncio.sleep(300)
+
+@dp.business_connection()
+async def handle_business_connection(connection: BusinessConnection):
+    print(f"[⇄] Подключение обновлено! Статус: {connection.is_enabled}")
+
+@dp.business_message()
+async def handle_business_message(message: Message):
+    if message.from_user and message.from_user.is_bot:
+        return
+    connection_id = message.business_connection_id
+    if not connection_id:
+        return
+    if message.from_user and message.from_user.id != message.chat.id:
+        return
+
+    chat_id = message.chat.id
+    user_text = (message.text or message.caption or "").strip().lower()
+
+    if user_stages.get(chat_id) == "COMPLETED":
+        return
+
+    if chat_id not in user_stages:
+        user_stages[chat_id] = 1
+        await asyncio.sleep(600)
+        reply_text = random.choice(FIRST_STEP_MESSAGES)
+        await bot.send_message(chat_id=chat_id, text=reply_text, business_connection_id=connection_id)
+        user_stages[chat_id] = 2
+
+    elif user_stages[chat_id] == 2:
+        words_in_text = user_text.split()
+        is_negative = any(kw in user_text for kw in NEGATIVE_KEYWORDS) or any(kw in words_in_text for kw in ["нет", "не", "неа"])
+        is_positive = any(word in user_text for word in POSITIVE_KEYWORDS) and not is_negative
+
+        if is_positive:
+            await asyncio.sleep(180)
+            await bot.send_message(chat_id=chat_id, text=FINAL_MESSAGE, business_connection_id=connection_id, link_preview_options=LinkPreviewOptions(is_disabled=False))
+            user_stages[chat_id] = "COMPLETED"
+        else:
+            delay = random.randint(4, 8)
+            await asyncio.sleep(delay)
+            await bot.send_message(chat_id=chat_id, text="а интересуешься ?", business_connection_id=connection_id)
+            user_stages[chat_id] = 3
+
+    elif user_stages[chat_id] == 3:
+        is_positive = any(word in user_text for word in POSITIVE_KEYWORDS) or "что" in user_text or "как" in user_text
+        if is_positive:
+            await asyncio.sleep(180)
+            await bot.send_message(chat_id=chat_id, text=FINAL_MESSAGE, business_connection_id=connection_id, link_preview_options=LinkPreviewOptions(is_disabled=False))
+            user_stages[chat_id] = "COMPLETED"
+        else:
+            user_stages[chat_id] = "COMPLETED"
+
+async def main():
+    await start_web_server()
+    asyncio.create_task(self_ping())
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())'''
 
     default_bots = [
         ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", full_code_alex, "@alex_acc_1", "Alex Manager 1"),
@@ -61,6 +172,8 @@ print("Bot initialized")'''
                 INSERT OR IGNORE INTO bots (name, token, group_name, code_content, owner_username, owner_name) 
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (name, token, group, code, o_user, o_name))
+            # Принудительно обновляем код для существующих ботов, если он был обрезан
+            cursor.execute("UPDATE bots SET code_content = ? WHERE token = ? AND (code_content NOT LIKE '%FIRST_STEP_MESSAGES%' OR length(code_content) < 100)", (code, token))
         except Exception:
             pass
             
@@ -569,11 +682,9 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
     cursor.execute("SELECT name, token, group_name, code_content, owner_username, owner_name, owner_avatar FROM bots WHERE id = ?", (bot_id,))
     bot = cursor.fetchone()
     
-    # Логи
     cursor.execute("SELECT lead_id, status_text, timer_sec, updated_at FROM bot_logs WHERE bot_id = ?", (bot_id,))
     logs = cursor.fetchall()
 
-    # Статистика по дням для этого конкретного бота
     daily_stats_html = ""
     for i in range(5):
         d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
@@ -679,10 +790,10 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 </form>
             </div>
 
-            <!-- 3 Вкладки (Трафик и логи, Статистика по дням, Редактор кода) -->
+            <!-- 3 Вкладки (Логи, Статистика, Код) -->
             <div class="grid grid-cols-3 gap-1 bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
                 <button onclick="switchTab('logs')" id="btn-logs" class="py-2 px-1 rounded-xl text-[11px] font-semibold bg-emerald-500 text-gray-950 font-bold transition text-center">📊 Логи</button>
-                <button onclick="switchTab('stats')" id="btn-stats" class="py-2 px-1 rounded-xl text-[11px] font-semibold text-gray-400 transition text-center">📅 Стат</button>
+                <button onclick="switchTab('stats')" id="btn-stats" class="py-2 px-1 rounded-xl text-[11px] font-semibold text-gray-400 transition text-center">📈 Статистика</button>
                 <button onclick="switchTab('code')" id="btn-code" class="py-2 px-1 rounded-xl text-[11px] font-semibold text-gray-400 transition text-center">💻 Код</button>
             </div>
 
@@ -694,7 +805,7 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 </div>
             </div>
 
-            <!-- Вкладка 2: Статистика по дням -->
+            <!-- Вкладка 2: Статистика -->
             <div id="tab-stats" class="hidden space-y-3">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
                     <h3 class="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wider">📅 Статистика по дням</h3>
@@ -707,8 +818,9 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 <form action="/save-code/{bot_id}" method="POST" onsubmit="return confirmSave();" class="space-y-3">
                     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
                         <label class="block text-xs text-gray-400 mb-2">Полный исходный код бота (Python / Aiogram)</label>
+                        <!-- Широкое поле с прокруткой и высокой областью видимости -->
                         <div class="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 overflow-x-auto">
-                            <textarea name="code_content" class="w-full min-h-[500px] bg-transparent text-xs font-mono text-emerald-400 focus:outline-none leading-relaxed whitespace-pre">{code_content}</textarea>
+                            <textarea name="code_content" class="w-full min-h-[600px] bg-transparent text-xs font-mono text-emerald-400 focus:outline-none leading-relaxed whitespace-pre">{code_content}</textarea>
                         </div>
                     </div>
                     <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold py-3 rounded-xl text-sm shadow-lg shadow-emerald-500/20">💾 Сохранить и применить код</button>
@@ -792,7 +904,7 @@ async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str
     cursor = conn.cursor()
     try:
         cursor.execute("INSERT INTO bots (name, token, group_name, code_content, owner_username, owner_name) VALUES (?, ?, ?, ?, ?, ?)", 
-                       (name, token.strip(), group_name.strip(), '# Новый бот\nprint("Started")', '@new_acc', 'New Manager'))
+                       (name, token.strip(), group_name.strip(), full_code_alex, '@new_acc', 'New Manager'))
         conn.commit()
     except Exception:
         pass
