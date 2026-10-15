@@ -47,7 +47,6 @@ import aiohttp
 BOT_TOKEN = "TOKEN_PLACEHOLDER"
 print("Bot initialized")'''
 
-    # Начальные боты с индивидуальными дефолтными юзернеймами
     default_bots = [
         ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", full_code_alex, "@alex_acc_1", "Alex Manager 1"),
         ("Alex Bot 2", "8989087015:AAHAkK_e-fcIQFLkrfQgs4-ZhrKXcJft1G4", "Alex Group", full_code_alex, "@alex_acc_2", "Alex Manager 2"),
@@ -105,51 +104,153 @@ async def login_page(error: str = None):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>Добро пожаловать | Вход</title>
+        <title>GOGOha Center | Авторизация</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
-            @keyframes float {{
-                0% {{ transform: translateY(0px) rotate(0deg); opacity: 0.3; }}
-                50% {{ transform: translateY(-20px) rotate(10deg); opacity: 0.8; }}
-                100% {{ transform: translateY(0px) rotate(0deg); opacity: 0.3; }}
+            body {{
+                background-color: #030712;
+                overflow: hidden;
             }}
-            @keyframes pulse-glow {{
-                0%, 100% {{ transform: scale(1); opacity: 0.2; }}
-                50% {{ transform: scale(1.05); opacity: 0.4; }}
+            canvas {{
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 1;
+                pointer-events: none;
             }}
-            .floating-element {{ animation: float 6s ease-in-out infinite; }}
-            .floating-element-delayed {{ animation: float 8s ease-in-out infinite 2s; }}
-            .glow-bg {{ animation: pulse-glow 4s ease-in-out infinite; }}
+            .login-container {{
+                position: relative;
+                z-index: 10;
+            }}
         </style>
     </head>
-    <body class="bg-gray-950 text-gray-100 min-h-screen flex items-center justify-center p-4 relative overflow-hidden select-none">
-        <div class="absolute inset-0 pointer-events-none overflow-hidden">
-            <div class="absolute -top-20 -left-20 w-72 h-72 bg-blue-600/20 rounded-full blur-3xl glow-bg"></div>
-            <div class="absolute -bottom-20 -right-20 w-72 h-72 bg-purple-600/20 rounded-full blur-3xl glow-bg"></div>
-            <div class="absolute top-1/4 left-10 text-3xl floating-element">💎</div>
-            <div class="absolute top-1/5 right-12 text-4xl floating-element-delayed">✈️</div>
-            <div class="absolute bottom-1/4 left-16 text-3xl floating-element-delayed">💵</div>
-            <div class="absolute bottom-1/5 right-20 text-3xl floating-element">⭐️</div>
+    <body class="text-gray-100 min-h-screen flex items-center justify-center p-4 select-none">
+        
+        <!-- Интерактивная 3D-сфера из точек (как на референсе) -->
+        <canvas id="particleCanvas"></canvas>
+
+        <!-- Светящийся мягкий фон -->
+        <div class="absolute inset-0 pointer-events-none overflow-hidden z-0">
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px]"></div>
         </div>
-        <div class="relative z-10 bg-gray-900/80 backdrop-blur-xl border border-gray-800 rounded-3xl p-8 w-full max-w-sm shadow-2xl">
+
+        <!-- Карточка авторизации -->
+        <div class="login-container bg-gray-900/85 backdrop-blur-2xl border border-gray-800/80 rounded-3xl p-8 w-full max-w-sm shadow-2xl shadow-emerald-950/20">
             <div class="text-center mb-6">
-                <div class="w-14 h-14 bg-blue-600/20 border border-blue-500/30 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-3 shadow-lg shadow-blue-500/20">🤖</div>
+                <div class="w-14 h-14 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-3 shadow-lg shadow-emerald-500/10">
+                    ⚡
+                </div>
                 <h1 class="text-xl font-bold text-white mb-1">Добро пожаловать</h1>
-                <p class="text-xs text-gray-400">Центр управления ботами и трафиком</p>
+                <p class="text-xs text-gray-400">Панель управления трафиком</p>
             </div>
             {err_html}
             <form action="/login" method="POST" class="space-y-4">
                 <div>
                     <label class="block text-xs text-gray-400 mb-1">Логин</label>
-                    <input type="text" name="username" required placeholder="Введите логин" class="w-full bg-gray-950/60 border border-gray-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                    <input type="text" name="username" required placeholder="Введите логин" class="w-full bg-gray-950/80 border border-gray-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500 transition">
                 </div>
                 <div>
                     <label class="block text-xs text-gray-400 mb-1">Пароль</label>
-                    <input type="password" name="password" required placeholder="••••••••" class="w-full bg-gray-950/60 border border-gray-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                    <input type="password" name="password" required placeholder="••••••••" class="w-full bg-gray-950/80 border border-gray-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500 transition">
                 </div>
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-sm font-semibold shadow-lg shadow-blue-600/30 transition transform active:scale-95">Войти в панель</button>
+                <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold py-3 rounded-xl text-sm shadow-lg shadow-emerald-500/20 transition transform active:scale-95">Войти в кабинет</button>
             </form>
         </div>
+
+        <script>
+            const canvas = document.getElementById('particleCanvas');
+            const ctx = canvas.getContext('2d');
+
+            function resize() {{
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }}
+            window.addEventListener('resize', resize);
+            resize();
+
+            const particles = [];
+            const count = 1200;
+            let angle = 0;
+
+            for (let i = 0; i < count; i++) {{
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos((Math.random() * 2) - 1);
+                particles.push({{
+                    theta: theta,
+                    phi: phi,
+                    radius: 130 + Math.random() * 20
+                }});
+            }}
+
+            // Орбитальные кольца
+            const rings = [];
+            for (let i = 0; i < 3; i++) {{
+                rings.push({{
+                    radiusX: 220 + i * 50,
+                    radiusY: 70 + i * 20,
+                    tilt: 0.3 + i * 0.2,
+                    speed: 0.005 + i * 0.002
+                }});
+            }}
+
+            function animate() {{
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const cx = canvas.width / 2;
+                const cy = canvas.height / 2 + 50;
+
+                angle += 0.008;
+
+                // Отрисовка точек сферы
+                ctx.fillStyle = 'rgba(52, 211, 153, 0.6)';
+                particles.forEach(p => {{
+                    const currentTheta = p.theta + angle;
+                    const x = p.radius * Math.sin(p.phi) * Math.cos(currentTheta);
+                    const y = p.radius * Math.sin(p.phi) * Math.sin(currentTheta);
+                    const z = p.radius * Math.cos(p.phi);
+
+                    // Вращение 3D
+                    const rotX = x;
+                    const rotY = y * Math.cos(0.4) - z * Math.sin(0.4);
+                    const rotZ = y * Math.sin(0.4) + z * Math.cos(0.4);
+
+                    const scale = 300 / (300 + rotZ);
+                    const px = cx + rotX * scale;
+                    const py = cy + rotY * scale;
+
+                    if (rotZ > -200) {{
+                        const size = Math.max(1, scale * 1.5);
+                        ctx.globalAlpha = Math.min(1, (rotZ + 200) / 250);
+                        ctx.fillRect(px, py, size, size);
+                    }}
+                }});
+
+                // Отрисовка орбит (колец)
+                rings.forEach(ring => {{
+                    ctx.strokeStyle = 'rgba(52, 211, 153, 0.25)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    for (let a = 0; a < Math.PI * 2; a += 0.05) {{
+                        const rx = Math.cos(a) * ring.radiusX;
+                        const ry = Math.sin(a) * ring.radiusY;
+                        
+                        const rotX = rx * Math.cos(angle * ring.speed * 10) - ry * Math.sin(angle * ring.speed * 10);
+                        const rotY = (rx * Math.sin(angle * ring.speed * 10) + ry * Math.cos(angle * ring.speed * 10)) * Math.cos(ring.tilt);
+
+                        const px = cx + rotX;
+                        const py = cy + rotY;
+
+                        if (a === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    }}
+                    ctx.stroke();
+                }});
+
+                requestAnimationFrame(animate);
+            }}
+            animate();
+        </script>
     </body>
     </html>
     """
@@ -158,12 +259,14 @@ async def login_page(error: str = None):
 async def login_post(username: str = Form(...), password: str = Form(...)):
     if username == "Gogoha" and password == "05056978":
         response = RedirectResponse(url="/", status_code=303)
+        # Устанавливаем сессионную куку (без expires / max_age — она удаляется при закрытии вкладки / обновлении)
         response.set_cookie(key="auth_token", value="gogoha_authenticated_session", httponly=True)
         return response
     return RedirectResponse(url="/login?error=Неверный логин или пароль", status_code=303)
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, auth_token: str = Cookie(None)):
+    # Строгая проверка: если куки нет или она невалидна — перенаправляем на логин
     if auth_token != "gogoha_authenticated_session":
         return RedirectResponse(url="/login", status_code=303)
 
@@ -210,10 +313,10 @@ async def dashboard(request: Request, auth_token: str = Cookie(None)):
             """ if group_name != "Общие" else ""
 
             bots_cards += f"""
-            <div class="bg-gray-900 border border-gray-800 hover:border-blue-500/50 rounded-2xl p-4 shadow-lg mb-3 transition flex justify-between items-center">
+            <div class="bg-gray-900 border border-gray-800 hover:border-emerald-500/50 rounded-2xl p-4 shadow-lg mb-3 transition flex justify-between items-center">
                 <a href="/bot/{b_id}" class="flex-grow">
                     <div class="flex justify-between items-start mb-1">
-                        <h3 class="font-semibold text-blue-400">🤖 {b_name}</h3>
+                        <h3 class="font-semibold text-emerald-400">🤖 {b_name}</h3>
                         <span class="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-lg">Активен</span>
                     </div>
                     <p class="text-xs text-gray-500 font-mono truncate">Token: {b_token[:10]}...</p>
@@ -224,7 +327,7 @@ async def dashboard(request: Request, auth_token: str = Cookie(None)):
         
         action_buttons = f"""
         <div class="flex items-center gap-1">
-            <button onclick="openAddModalToGroup('{group_name}')" class="text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-lg font-bold" title="Добавить бота">+</button>
+            <button onclick="openAddModalToGroup('{group_name}')" class="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-lg font-bold" title="Добавить бота">+</button>
             <form action="/delete-group" method="POST" onsubmit="return confirm('Удалить папку {group_name}?');" class="inline">
                 <input type="hidden" name="group_name" value="{group_name}">
                 <button type="submit" class="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-lg" title="Удалить">🗑</button>
@@ -267,7 +370,7 @@ async def dashboard(request: Request, auth_token: str = Cookie(None)):
                 </div>
                 <div class="flex gap-2">
                     <button onclick="openGroupModal()" class="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-semibold border border-gray-700">+ Группа</button>
-                    <button onclick="openModal()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/30">+ Бот</button>
+                    <button onclick="openModal()" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl text-xs shadow-lg shadow-emerald-500/20">+ Бот</button>
                 </div>
             </header>
 
@@ -276,7 +379,7 @@ async def dashboard(request: Request, auth_token: str = Cookie(None)):
                 <div class="grid grid-cols-2 gap-3">
                     <div class="bg-gray-950 p-3 rounded-xl border border-gray-800/80">
                         <div class="text-xs text-gray-400">Отписал лидам</div>
-                        <div class="text-lg font-bold text-blue-400">{total_today}</div>
+                        <div class="text-lg font-bold text-emerald-400">{total_today}</div>
                     </div>
                     <div class="bg-gray-950 p-3 rounded-xl border border-gray-800/80">
                         <div class="text-xs text-gray-400">Отправлено ссылок</div>
@@ -302,19 +405,19 @@ async def dashboard(request: Request, auth_token: str = Cookie(None)):
                     <form action="/add-bot" method="POST" class="space-y-3">
                         <div>
                             <label class="block text-xs text-gray-400 mb-1">Название</label>
-                            <input type="text" name="name" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500">
+                            <input type="text" name="name" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500">
                         </div>
                         <div>
                             <label class="block text-xs text-gray-400 mb-1">Группа / Папка</label>
-                            <input type="text" id="modalGroupName" name="group_name" value="Общие" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500">
+                            <input type="text" id="modalGroupName" name="group_name" value="Общие" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500">
                         </div>
                         <div>
                             <label class="block text-xs text-gray-400 mb-1">Token</label>
-                            <input type="text" name="token" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="123456:ABC...">
+                            <input type="text" name="token" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500" placeholder="123456:ABC...">
                         </div>
                         <div class="flex gap-3 pt-2">
                             <button type="button" onclick="closeModal()" class="w-1/2 bg-gray-800 text-gray-300 py-3 rounded-xl text-sm font-medium">Отмена</button>
-                            <button type="submit" class="w-1/2 bg-blue-600 text-white py-3 rounded-xl text-sm font-medium">Сохранить</button>
+                            <button type="submit" class="w-1/2 bg-emerald-500 text-gray-950 font-bold py-3 rounded-xl text-sm">Сохранить</button>
                         </div>
                     </form>
                 </div>
@@ -326,11 +429,11 @@ async def dashboard(request: Request, auth_token: str = Cookie(None)):
                     <form action="/add-group" method="POST" class="space-y-3">
                         <div>
                             <label class="block text-xs text-gray-400 mb-1">Название группы</label>
-                            <input type="text" name="group_name" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500">
+                            <input type="text" name="group_name" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500">
                         </div>
                         <div class="flex gap-3 pt-2">
                             <button type="button" onclick="closeGroupModal()" class="w-1/2 bg-gray-800 text-gray-300 py-3 rounded-xl text-sm font-medium">Отмена</button>
-                            <button type="submit" class="w-1/2 bg-blue-600 text-white py-3 rounded-xl text-sm font-medium">Создать</button>
+                            <button type="submit" class="w-1/2 bg-emerald-500 text-gray-950 font-bold py-3 rounded-xl text-sm">Создать</button>
                         </div>
                     </form>
                 </div>
@@ -346,11 +449,11 @@ async def dashboard(request: Request, auth_token: str = Cookie(None)):
                             {{
                                 label: 'Отписано лидам',
                                 data: {chart_messages},
-                                borderColor: '#a3e635',
-                                backgroundColor: 'rgba(163, 230, 53, 0.1)',
+                                borderColor: '#34d399',
+                                backgroundColor: 'rgba(52, 211, 153, 0.1)',
                                 borderWidth: 2,
                                 tension: 0.4,
-                                pointBackgroundColor: '#a3e635',
+                                pointBackgroundColor: '#34d399',
                                 pointRadius: 4,
                                 pointHoverRadius: 6,
                                 fill: true
@@ -420,7 +523,7 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
         <div class="bg-gray-800/40 border border-gray-700/30 rounded-xl p-3 mb-2 text-xs">
             <div class="flex justify-between text-gray-400 mb-1">
                 <span>Лид ID: <b class="text-white font-mono">{lead_id}</b></span>
-                <span class="text-blue-400">⏱ {timer_sec} сек</span>
+                <span class="text-emerald-400">⏱ {timer_sec} сек</span>
             </div>
             <p class="text-gray-200">{status_text}</p>
         </div>
@@ -441,30 +544,27 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
         <div class="max-w-md mx-auto">
             <div class="flex items-center justify-between mb-4 pt-2">
                 <a href="/" class="text-xs bg-gray-900 border border-gray-800 text-gray-300 px-3 py-1.5 rounded-xl">← Назад</a>
-                <h1 class="font-bold text-base text-blue-400">{name}</h1>
+                <h1 class="font-bold text-base text-emerald-400">{name}</h1>
                 <span class="text-xs text-gray-500">{group_name}</span>
             </div>
 
-            <!-- Плашка аккаунта и самого бота для каждого бота индивидуально -->
-            <div class="bg-gradient-to-r from-blue-950/60 to-gray-900 border border-blue-500/20 rounded-2xl p-4 mb-4 shadow-xl">
+            <div class="bg-gradient-to-r from-emerald-950/40 to-gray-900 border border-emerald-500/20 rounded-2xl p-4 mb-4 shadow-xl">
                 <div class="flex items-center justify-between mb-3">
                     <span class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">👥 Telegram Аккаунт & Бот</span>
-                    <button onclick="toggleEditOwner()" class="text-[10px] text-blue-400 hover:underline">Изменить аккаунт</button>
+                    <button onclick="toggleEditOwner()" class="text-[10px] text-emerald-400 hover:underline">Изменить аккаунт</button>
                 </div>
                 
-                <!-- Аккаунт рассылки -->
                 <div id="owner-display" class="flex items-center gap-3 mb-3 pb-3 border-b border-gray-800">
-                    <img src="{owner_avatar}" class="w-12 h-12 rounded-full border-2 border-blue-500/40 object-cover shadow-md">
+                    <img src="{owner_avatar}" class="w-12 h-12 rounded-full border-2 border-emerald-500/40 object-cover shadow-md">
                     <div class="overflow-hidden">
                         <div class="flex items-center gap-2">
                             <h2 class="text-sm font-bold text-white truncate">{owner_name}</h2>
                             <span class="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-semibold">Рассылает</span>
                         </div>
-                        <p class="text-xs text-blue-400 font-mono mt-0.5">{owner_username}</p>
+                        <p class="text-xs text-emerald-400 font-mono mt-0.5">{owner_username}</p>
                     </div>
                 </div>
 
-                <!-- Технический бот -->
                 <div class="flex items-center justify-between text-xs text-gray-400">
                     <div class="flex items-center gap-2">
                         <span class="text-base">🤖</span>
@@ -476,7 +576,6 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
                     <span class="text-[10px] bg-gray-800 text-gray-300 px-2 py-1 rounded-lg font-mono">Token: {token[:8]}...</span>
                 </div>
 
-                <!-- Форма изменения индивидуального аккаунта -->
                 <form id="owner-form" action="/update-owner/{bot_id}" method="POST" class="hidden space-y-2 mt-2 pt-2 border-t border-gray-800">
                     <div>
                         <label class="block text-[10px] text-gray-400 mb-1">Имя аккаунта</label>
@@ -491,14 +590,14 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
                         <input type="text" name="owner_avatar" value="{owner_avatar}" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-white">
                     </div>
                     <div class="flex gap-2 pt-1">
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Сохранить</button>
+                        <button type="submit" class="bg-emerald-500 text-gray-950 font-bold px-3 py-1.5 rounded-lg text-xs">Сохранить</button>
                         <button type="button" onclick="toggleEditOwner()" class="bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg text-xs">Отмена</button>
                     </div>
                 </form>
             </div>
 
             <div class="flex bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
-                <button onclick="switchTab('logs')" id="btn-logs" class="w-1/2 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white transition">📊 Трафик и логи</button>
+                <button onclick="switchTab('logs')" id="btn-logs" class="w-1/2 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-gray-950 font-bold transition">📊 Трафик и логи</button>
                 <button onclick="trySwitchToCode()" id="btn-code" class="w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition">💻 Редактор кода</button>
             </div>
 
@@ -513,9 +612,9 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
                 <form action="/save-code/{bot_id}" method="POST" onsubmit="return confirmSave();" class="space-y-3">
                     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
                         <label class="block text-xs text-gray-400 mb-2">Полный исходный код бота (Python / Aiogram)</label>
-                        <textarea name="code_content" class="w-full h-96 bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-mono text-green-400 focus:outline-none focus:border-blue-500 leading-relaxed overflow-y-auto">{code_content}</textarea>
+                        <textarea name="code_content" class="w-full h-96 bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-mono text-emerald-400 focus:outline-none focus:border-emerald-500 leading-relaxed overflow-y-auto">{code_content}</textarea>
                     </div>
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-sm font-semibold shadow-lg shadow-blue-600/30">💾 Сохранить и применить код</button>
+                    <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold py-3 rounded-xl text-sm shadow-lg shadow-emerald-500/20">💾 Сохранить и применить код</button>
                 </form>
             </div>
 
@@ -536,7 +635,7 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
                     if (confirm("Вы точно хотите редактировать код?")) {{
                         document.getElementById('tab-code').classList.remove('hidden');
                         document.getElementById('tab-logs').classList.add('hidden');
-                        document.getElementById('btn-code').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white transition';
+                        document.getElementById('btn-code').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-gray-950 font-bold transition';
                         document.getElementById('btn-logs').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition';
                     }}
                 }}
@@ -549,7 +648,7 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
                     if (tab === 'logs') {{
                         document.getElementById('tab-logs').classList.remove('hidden');
                         document.getElementById('tab-code').classList.add('hidden');
-                        document.getElementById('btn-logs').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white transition';
+                        document.getElementById('btn-logs').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-gray-950 font-bold transition';
                         document.getElementById('btn-code').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition';
                     }}
                 }}
@@ -588,7 +687,7 @@ async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/add-group")
-async def add_group(group_name: str = Form(...), auth_token: str = Cookie(None)):
+async def add_group(group_name: str = Form(...), auth_token: str = Cookie(Name:=None), auth_token: str = Cookie(None)):
     if auth_token != "gogoha_authenticated_session":
         return RedirectResponse(url="/login", status_code=303)
     return RedirectResponse(url="/", status_code=303)
@@ -606,8 +705,8 @@ async def delete_group(group_name: str = Form(...), auth_token: str = Cookie(Non
 
 @app.post("/remove-from-group")
 async def remove_from_group(bot_id: int = Form(...), auth_token: str = Cookie(None)):
-    if auth_token != "gog/authenticated_session":
-        pass
+    if auth_token != "gogoha_authenticated_session":
+        return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     cursor.execute("UPDATE bots SET group_name = 'Общие' WHERE id = ?", (bot_id,))
@@ -616,7 +715,7 @@ async def remove_from_group(bot_id: int = Form(...), auth_token: str = Cookie(No
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/save-code/{bot_id}")
-async def save_code(bot_id: int, code_content: str = Form(...), auth_token: str = Cookie(None)):
+async def save_code(bot_id: int, code_content:str = Form(...), auth_token: str = Cookie(None)):
     if auth_token != "gogoha_authenticated_session":
         return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
