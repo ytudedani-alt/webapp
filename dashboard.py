@@ -237,7 +237,6 @@ async def login_page(response: Response, error: str = None):
     </html>
     """
     res = HTMLResponse(content=html)
-    # Сбрасываем старые куки при каждом переходе на логин
     res.delete_cookie("auth_token")
     res.delete_cookie("gogoha_strict_session")
     return res
@@ -246,7 +245,6 @@ async def login_page(response: Response, error: str = None):
 async def login_post(username: str = Form(...), password: str = Form(...)):
     if username == "Gogoha" and password == "05056978":
         response = RedirectResponse(url="/", status_code=303)
-        # Сохраняем сессию на 15 минут
         response.set_cookie(key="gogoha_strict_session", value="active_valid_session", max_age=900, httponly=True)
         return response
     return RedirectResponse(url="/login?error=Неверный логин или пароль", status_code=303)
@@ -353,9 +351,31 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
         <meta name="theme-color" content="#030712">
         <script src="https://cdn.tailwindcss.com"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>
+            canvas#particleCanvas {{
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 0;
+                pointer-events: none;
+            }}
+            .main-content {{
+                position: relative;
+                z-index: 10;
+            }}
+        </style>
     </head>
     <body class="bg-gray-950 text-gray-100 min-h-screen p-4 pb-10 select-none">
-        <div class="max-w-md mx-auto">
+        
+        <canvas id="particleCanvas"></canvas>
+
+        <div class="absolute inset-0 pointer-events-none overflow-hidden z-0">
+            <div class="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-emerald-500/5 rounded-full blur-[140px]"></div>
+        </div>
+
+        <div class="max-w-md mx-auto main-content">
             <header class="flex justify-between items-center mb-4 pt-2">
                 <div>
                     <h1 class="text-xl font-bold text-white">📱 Мои Боты</h1>
@@ -363,26 +383,26 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                 </div>
                 <div class="flex gap-2 items-center">
                     <a href="/logout" class="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-semibold border border-red-500/20">🚪 Выйти</a>
-                    <button onclick="openGroupModal()" class="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-semibold border border-gray-700">+ Группа</button>
+                    <button onclick="openGroupModal()" class="px-2.5 py-1.5 bg-gray-900/90 hover:bg-gray-800 text-gray-200 rounded-xl text-xs font-semibold border border-gray-800">+ Группа</button>
                     <button onclick="openModal()" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl text-xs shadow-lg shadow-emerald-500/20">+ Бот</button>
                 </div>
             </header>
 
-            <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
+            <div class="bg-gray-900/90 backdrop-blur-xl border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
                 <h3 class="text-xs font-semibold text-gray-300 mb-3">📊 Статистика за сегодня</h3>
                 <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-gray-950 p-3 rounded-xl border border-gray-800/80">
+                    <div class="bg-gray-950/80 p-3 rounded-xl border border-gray-800/80">
                         <div class="text-xs text-gray-400">Отписал лидам</div>
                         <div class="text-lg font-bold text-emerald-400">{total_today}</div>
                     </div>
-                    <div class="bg-gray-950 p-3 rounded-xl border border-gray-800/80">
+                    <div class="bg-gray-950/80 p-3 rounded-xl border border-gray-800/80">
                         <div class="text-xs text-gray-400">Отправлено ссылок</div>
                         <div class="text-lg font-bold text-purple-400">{links_today}</div>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-6 shadow-xl">
+            <div class="bg-gray-900/90 backdrop-blur-xl border border-gray-800 rounded-2xl p-4 mb-6 shadow-xl">
                 <div class="flex justify-between items-center mb-3">
                     <h3 class="text-xs font-semibold text-gray-300">📈 Динамика трафика</h3>
                 </div>
@@ -434,8 +454,60 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
             </div>
 
             <script>
-                const ctx = document.getElementById('trafficChart').getContext('2d');
-                const trafficChart = new Chart(ctx, {{
+                const canvas = document.getElementById('particleCanvas');
+                const ctx = canvas.getContext('2d');
+
+                function resize() {{
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                }}
+                window.addEventListener('resize', resize);
+                resize();
+
+                const particles = [];
+                const count = 900;
+                let angle = 0;
+
+                for (let i = 0; i < count; i++) {{
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.acos((Math.random() * 2) - 1);
+                    particles.push({{ theta, phi, radius: 140 + Math.random() * 15 }});
+                }}
+
+                function animate() {{
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    const cx = canvas.width / 2;
+                    const cy = canvas.height / 3;
+
+                    angle += 0.005;
+
+                    ctx.fillStyle = 'rgba(52, 211, 153, 0.45)';
+                    particles.forEach(p => {{
+                        const currentTheta = p.theta + angle;
+                        const x = p.radius * Math.sin(p.phi) * Math.cos(currentTheta);
+                        const y = p.radius * Math.sin(p.phi) * Math.sin(currentTheta);
+                        const z = p.radius * Math.cos(p.phi);
+
+                        const rotY = y * Math.cos(0.3) - z * Math.sin(0.3);
+                        const rotZ = y * Math.sin(0.3) + z * Math.cos(0.3);
+
+                        const scale = 300 / (300 + rotZ);
+                        const px = cx + x * scale;
+                        const py = cy + rotY * scale;
+
+                        if (rotZ > -200) {{
+                            const size = Math.max(1, scale * 1.3);
+                            ctx.globalAlpha = Math.min(1, (rotZ + 200) / 250);
+                            ctx.fillRect(px, py, size, size);
+                        }}
+                    }});
+
+                    requestAnimationFrame(animate);
+                }}
+                animate();
+
+                const chartCtx = document.getElementById('trafficChart').getContext('2d');
+                const trafficChart = new Chart(chartCtx, {{
                     type: 'line',
                     data: {{
                         labels: {chart_labels},
@@ -501,8 +573,29 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
     cursor.execute("SELECT name, token, group_name, code_content, owner_username, owner_name, owner_avatar FROM bots WHERE id = ?", (bot_id,))
     bot = cursor.fetchone()
     
+    # Логи
     cursor.execute("SELECT lead_id, status_text, timer_sec, updated_at FROM bot_logs WHERE bot_id = ?", (bot_id,))
     logs = cursor.fetchall()
+
+    # Статистика по дням для этого конкретного бота
+    daily_stats_html = ""
+    for i in range(5):
+        d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+        d_label = (datetime.now() - timedelta(days=i)).strftime("%d.%m.%Y")
+        cursor.execute("SELECT COUNT(*), SUM(is_final_link) FROM bot_logs WHERE bot_id = ? AND date(updated_at) = ?", (bot_id, d))
+        res = cursor.fetchone()
+        msgs = res[0] or 0
+        links = res[1] or 0
+        daily_stats_html += f"""
+        <div class="flex justify-between items-center bg-gray-950/60 border border-gray-800/60 rounded-xl p-2.5 mb-2 text-xs">
+            <span class="text-gray-300 font-medium">📅 {d_label}</span>
+            <div class="flex gap-4">
+                <span class="text-emerald-400">Лидам: <b>{msgs}</b></span>
+                <span class="text-purple-400">Ссылки: <b>{links}</b></span>
+            </div>
+        </div>
+        """
+
     conn.close()
 
     if not bot:
@@ -592,12 +685,18 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
 
             <div class="flex bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
                 <button onclick="switchTab('logs')" id="btn-logs" class="w-1/2 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-gray-950 font-bold transition">📊 Трафик и логи</button>
-                <button onclick="trySwitchToCode()" id="btn-code" class="w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition">💻 Редактор кода</button>
+                <button onclick="switchTab('code')" id="btn-code" class="w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition">💻 Редактор кода</button>
             </div>
 
             <div id="tab-logs" class="space-y-3">
+                <!-- Статистика по дням без графика -->
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
-                    <h3 class="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wider">👥 Текущие переписки и таймеры</h3>
+                    <h3 class="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wider">📅 Статистика по дням</h3>
+                    {daily_stats_html}
+                </div>
+
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
+                    <h3 class="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wider">👥 Активные переписки и таймеры</h3>
                     {logs_html}
                 </div>
             </div>
@@ -606,7 +705,10 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 <form action="/save-code/{bot_id}" method="POST" onsubmit="return confirmSave();" class="space-y-3">
                     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
                         <label class="block text-xs text-gray-400 mb-2">Полный исходный код бота (Python / Aiogram)</label>
-                        <textarea name="code_content" class="w-full h-96 bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-mono text-emerald-400 focus:outline-none focus:border-emerald-500 leading-relaxed overflow-y-auto">{code_content}</textarea>
+                        <!-- Сделана полная прокрутка во все стороны и убраны ограничения высоты -->
+                        <div class="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 overflow-x-auto">
+                            <textarea name="code_content" class="w-full min-h-[500px] bg-transparent text-xs font-mono text-emerald-400 focus:outline-none leading-relaxed whitespace-pre">{code_content}</textarea>
+                        </div>
                     </div>
                     <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold py-3 rounded-xl text-sm shadow-lg shadow-emerald-500/20">💾 Сохранить и применить код</button>
                 </form>
@@ -625,15 +727,6 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                     }}
                 }}
 
-                function trySwitchToCode() {{
-                    if (confirm("Вы точно хотите редактировать код?")) {{
-                        document.getElementById('tab-code').classList.remove('hidden');
-                        document.getElementById('tab-logs').classList.add('hidden');
-                        document.getElementById('btn-code').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-gray-950 font-bold transition';
-                        document.getElementById('btn-logs').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition';
-                    }}
-                }}
-
                 function confirmSave() {{
                     return confirm("Вы точно хотите сохранить изменения в коде?");
                 }}
@@ -644,6 +737,13 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                         document.getElementById('tab-code').classList.add('hidden');
                         document.getElementById('btn-logs').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-gray-950 font-bold transition';
                         document.getElementById('btn-code').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition';
+                    }} else if (tab === 'code') {{
+                        if (confirm("Вы точно хотите перейти в редактор кода?")) {{
+                            document.getElementById('tab-code').classList.remove('hidden');
+                            document.getElementById('tab-logs').classList.add('hidden');
+                            document.getElementById('btn-code').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-gray-950 font-bold transition';
+                            document.getElementById('btn-logs').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition';
+                        }}
                     }}
                 }}
             </script>
