@@ -128,15 +128,12 @@ async def login_page(error: str = None):
     </head>
     <body class="text-gray-100 min-h-screen flex items-center justify-center p-4 select-none">
         
-        <!-- Интерактивная 3D-сфера из точек (как на референсе) -->
         <canvas id="particleCanvas"></canvas>
 
-        <!-- Светящийся мягкий фон -->
         <div class="absolute inset-0 pointer-events-none overflow-hidden z-0">
             <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px]"></div>
         </div>
 
-        <!-- Карточка авторизации -->
         <div class="login-container bg-gray-900/85 backdrop-blur-2xl border border-gray-800/80 rounded-3xl p-8 w-full max-w-sm shadow-2xl shadow-emerald-950/20">
             <div class="text-center mb-6">
                 <div class="w-14 h-14 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-3 shadow-lg shadow-emerald-500/10">
@@ -184,7 +181,6 @@ async def login_page(error: str = None):
                 }});
             }}
 
-            // Орбитальные кольца
             const rings = [];
             for (let i = 0; i < 3; i++) {{
                 rings.push({{
@@ -202,7 +198,6 @@ async def login_page(error: str = None):
 
                 angle += 0.008;
 
-                // Отрисовка точек сферы
                 ctx.fillStyle = 'rgba(52, 211, 153, 0.6)';
                 particles.forEach(p => {{
                     const currentTheta = p.theta + angle;
@@ -210,7 +205,6 @@ async def login_page(error: str = None):
                     const y = p.radius * Math.sin(p.phi) * Math.sin(currentTheta);
                     const z = p.radius * Math.cos(p.phi);
 
-                    // Вращение 3D
                     const rotX = x;
                     const rotY = y * Math.cos(0.4) - z * Math.sin(0.4);
                     const rotZ = y * Math.sin(0.4) + z * Math.cos(0.4);
@@ -226,7 +220,6 @@ async def login_page(error: str = None):
                     }}
                 }});
 
-                // Отрисовка орбит (колец)
                 rings.forEach(ring => {{
                     ctx.strokeStyle = 'rgba(52, 211, 153, 0.25)';
                     ctx.lineWidth = 1;
@@ -259,14 +252,12 @@ async def login_page(error: str = None):
 async def login_post(username: str = Form(...), password: str = Form(...)):
     if username == "Gogoha" and password == "05056978":
         response = RedirectResponse(url="/", status_code=303)
-        # Устанавливаем сессионную куку (без expires / max_age — она удаляется при закрытии вкладки / обновлении)
         response.set_cookie(key="auth_token", value="gogoha_authenticated_session", httponly=True)
         return response
     return RedirectResponse(url="/login?error=Неверный логин или пароль", status_code=303)
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, auth_token: str = Cookie(None)):
-    # Строгая проверка: если куки нет или она невалидна — перенаправляем на логин
     if auth_token != "gogoha_authenticated_session":
         return RedirectResponse(url="/login", status_code=303)
 
@@ -687,7 +678,7 @@ async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/add-group")
-async def add_group(group_name: str = Form(...), auth_token: str = Cookie(Name:=None), auth_token: str = Cookie(None)):
+async def add_group(group_name: str = Form(...), auth_token: str = Cookie(None)):
     if auth_token != "gogoha_authenticated_session":
         return RedirectResponse(url="/login", status_code=303)
     return RedirectResponse(url="/", status_code=303)
@@ -715,7 +706,7 @@ async def remove_from_group(bot_id: int = Form(...), auth_token: str = Cookie(No
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/save-code/{bot_id}")
-async def save_code(bot_id: int, code_content:str = Form(...), auth_token: str = Cookie(None)):
+async def save_code(bot_id: int, code_content: str = Form(...), auth_token: str = Cookie(None)):
     if auth_token != "gogoha_authenticated_session":
         return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
