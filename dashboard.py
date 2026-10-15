@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 import sqlite3
 import os
+import aiohttp
 from datetime import datetime, timedelta
 
 app = FastAPI(title="Alex Advanced Bot Control Center")
@@ -62,6 +63,38 @@ print("Bot initialized")'''
 
 init_db()
 
+async def get_telegram_account_info(token: str):
+    """Получает информацию об аккаунте/боте Telegram и ссылку на аватарку"""
+    account_info = {
+        "username": "Неизвестно",
+        "first_name": "Аккаунт",
+        "avatar_url": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Получаем информацию о боте
+            async with session.get(f"https://api.telegram.org/bot{token}/getMe") as resp:
+                data = await resp.json()
+                if data.get("ok"):
+                    result = data["result"]
+                    account_info["username"] = f"@{result.get('username', 'no_username')}"
+                    account_info["first_name"] = result.get("first_name", "Бот")
+
+            # Получаем аватарку
+            async with session.get(f"https://api.telegram.org/bot{token}/getUserProfilePhotos?limit=1") as resp:
+                data = await resp.json()
+                if data.get("ok") and data["result"]["total_count"] > 0:
+                    file_id = data["result"]["photos"][0][0]["file_id"]
+                    async with session.get(f"https://api.telegram.org/bot{token}/getFile?file_id={file_id}") as file_resp:
+                        file_data = await file_resp.json()
+                        if file_data.get("ok"):
+                            file_path = file_data["result"]["file_path"]
+                            account_info["avatar_url"] = f"https://api.telegram.org/file/bot{token}/{file_path}"
+    except Exception as e:
+        print(f"Ошибка получения инфо Telegram: {e}")
+        
+    return account_info
+
 @app.get("/manifest.json")
 async def manifest():
     return JSONResponse({
@@ -81,14 +114,12 @@ async def dashboard(request: Request):
     cursor.execute("SELECT id, name, token, group_name FROM bots")
     bots = cursor.fetchall()
     
-    # Статистика за сегодня
     today_str = datetime.now().strftime("%Y-%m-%d")
     cursor.execute("SELECT COUNT(*), SUM(is_final_link) FROM bot_logs WHERE date(updated_at) = ?", (today_str,))
     today_stats = cursor.fetchone()
     total_today = today_stats[0] or 0
     links_today = today_stats[1] or 0
 
-    # Данные для графика за последние 7 дней
     chart_labels = []
     chart_messages = []
     chart_links = []
@@ -187,7 +218,6 @@ async def dashboard(request: Request):
                 </div>
             </header>
 
-            <!-- Статистика за сегодня -->
             <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
                 <h3 class="text-xs font-semibold text-gray-300 mb-3">📊 Статистика за сегодня</h3>
                 <div class="grid grid-cols-2 gap-3">
@@ -202,7 +232,6 @@ async def dashboard(request: Request):
                 </div>
             </div>
 
-            <!-- График динамики по дням (как в партнерках) -->
             <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-6 shadow-xl">
                 <div class="flex justify-between items-center mb-3">
                     <h3 class="text-xs font-semibold text-gray-300">📈 Динамика трафика</h3>
@@ -214,7 +243,6 @@ async def dashboard(request: Request):
 
             {groups_html}
 
-            <!-- Модалка добавления бота -->
             <div id="addModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
                 <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
                     <h3 class="text-lg font-bold text-white mb-4">➕ Добавить бота</h3>
@@ -239,7 +267,6 @@ async def dashboard(request: Request):
                 </div>
             </div>
 
-            <!-- Модалка создания группы -->
             <div id="groupModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
                 <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
                     <h3 class="text-lg font-bold text-white mb-4">📁 Новая группа</h3>
@@ -257,7 +284,6 @@ async def dashboard(request: Request):
             </div>
 
             <script>
-                // Инициализация графика Chart.js
                 const ctx = document.getElementById('trafficChart').getContext('2d');
                 const trafficChart = new Chart(ctx, {{
                     type: 'line',
@@ -267,7 +293,7 @@ async def dashboard(request: Request):
                             {{
                                 label: 'Отписано лидам',
                                 data: {chart_messages},
-                                borderColor: '#a3e635', // Неоновый лайм как на референсе
+                                borderColor: '#a3e635',
                                 backgroundColor: 'rgba(163, 230, 53, 0.1)',
                                 borderWidth: 2,
                                 tension: 0.4,
@@ -279,7 +305,7 @@ async def dashboard(request: Request):
                             {{
                                 label: 'Ссылки отправлены',
                                 data: {chart_links},
-                                borderColor: '#38bdf8', // Голубой
+                                borderColor: '#38bdf8',
                                 backgroundColor: 'transparent',
                                 borderWidth: 2,
                                 tension: 0.4,
@@ -293,30 +319,12 @@ async def dashboard(request: Request):
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {{
-                            legend: {{
-                                labels: {{
-                                    boxWidth: 12,
-                                    font: {{ size: 10 }},
-                                    color: '#9ca3af'
-                                }}
-                            }},
-                            tooltip: {{
-                                backgroundColor: '#111827',
-                                titleFont: {{ size: 12 }},
-                                bodyFont: {{ size: 11 }},
-                                borderColor: '#374151',
-                                borderWidth: 1
-                            }}
+                            legend: {{ labels: {{ boxWidth: 12, font: {{ size: 10 }}, color: '#9ca3af' }} }},
+                            tooltip: {{ backgroundColor: '#111827', titleFont: {{ size: 12 }}, bodyFont: {{ size: 11 }}, borderColor: '#374151', borderWidth: 1 }}
                         }},
                         scales: {{
-                            x: {{
-                                grid: {{ color: '#1f2937', display: true }},
-                                ticks: {{ color: '#9ca3af', font: {{ size: 10 }} }}
-                            }},
-                            y: {{
-                                grid: {{ color: '#1f2937' }},
-                                ticks: {{ color: '#9ca3af', font: {{ size: 10 }}, stepSize: 1 }}
-                            }}
+                            x: {{ grid: {{ color: '#1f2937', display: true }}, ticks: {{ color: '#9ca3af', font: {{ size: 10 }} }} }},
+                            y: {{ grid: {{ color: '#1f2937' }}, ticks: {{ color: '#9ca3af', font: {{ size: 10 }}, stepSize: 1 }} }}
                         }}
                     }}
                 }});
@@ -349,6 +357,9 @@ async def bot_detail(bot_id: int):
 
     name, token, group_name, code_content = bot
 
+    # Запрашиваем актуальную инфо Telegram (аватарку, юзернейм)
+    tg_info = await get_telegram_account_info(token)
+
     logs_html = ""
     for lead_id, status_text, timer_sec, updated_at in logs:
         logs_html += f"""
@@ -378,6 +389,19 @@ async def bot_detail(bot_id: int):
                 <a href="/" class="text-xs bg-gray-900 border border-gray-800 text-gray-300 px-3 py-1.5 rounded-xl">← Назад</a>
                 <h1 class="font-bold text-base text-blue-400">{name}</h1>
                 <span class="text-xs text-gray-500">{group_name}</span>
+            </div>
+
+            <!-- Блок подключенного Telegram-аккаунта -->
+            <div class="bg-gradient-to-r from-blue-950/60 to-gray-900 border border-blue-500/20 rounded-2xl p-4 mb-4 shadow-xl flex items-center gap-3">
+                <img src="{tg_info['avatar_url']}" class="w-12 h-12 rounded-full border-2 border-blue-500/40 object-cover shadow-md">
+                <div class="overflow-hidden">
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-sm font-bold text-white truncate">{tg_info['first_name']}</h2>
+                        <span class="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-semibold">Подключен</span>
+                    </div>
+                    <p class="text-xs text-blue-400 font-mono mt-0.5">{tg_info['username']}</p>
+                    <p class="text-[10px] text-gray-500 truncate font-mono mt-0.5">Token: {token[:12]}...</p>
+                </div>
             </div>
 
             <div class="flex bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
