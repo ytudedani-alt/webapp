@@ -36,10 +36,11 @@ def init_db():
         )
     """)
 
-    # Полный полноценный рабочий код бота
+    # Полноценный код бота с автозаписью статистики в БД
     full_code_alex = '''import asyncio
 import os
 import random
+import sqlite3
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message, BusinessConnection, LinkPreviewOptions
 from aiohttp import web
@@ -72,6 +73,23 @@ user_stages = {}
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+def log_bot_event(lead_id, status_text, timer_sec, is_final_link=0):
+    try:
+        conn = sqlite3.connect("dashboard_bots.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM bots WHERE token = ?", (BOT_TOKEN,))
+        row = cursor.fetchone()
+        if row:
+            bot_id = row[0]
+            cursor.execute("""
+                INSERT INTO bot_logs (bot_id, lead_id, status_text, timer_sec, is_final_link)
+                VALUES (?, ?, ?, ?, ?)
+            """, (bot_id, str(lead_id), status_text, timer_sec, is_final_link))
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Ошибка логирования: {e}")
+
 async def handle_ping(request):
     return web.Response(text="Bot is active")
 
@@ -83,7 +101,6 @@ async def start_web_server():
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    print(f"🌐 Веб-сервер запущен на порту {port}")
 
 async def self_ping():
     render_url = os.environ.get("RENDER_EXTERNAL_URL", "")
@@ -94,9 +111,9 @@ async def self_ping():
         while True:
             try:
                 async with session.get(render_url) as response:
-                    print(f"[PINGS] Статус: {response.status}")
-            except Exception as e:
-                print(f"[PINGS] Ошибка: {e}")
+                    pass
+            except Exception:
+                pass
             await asyncio.sleep(300)
 
 @dp.business_connection()
@@ -121,9 +138,12 @@ async def handle_business_message(message: Message):
 
     if chat_id not in user_stages:
         user_stages[chat_id] = 1
-        await asyncio.sleep(600)
+        timer = 600
+        log_bot_event(chat_id, "Инициализация диалога. Ожидание первого сообщения.", timer, 0)
+        await asyncio.sleep(timer)
         reply_text = random.choice(FIRST_STEP_MESSAGES)
         await bot.send_message(chat_id=chat_id, text=reply_text, business_connection_id=connection_id)
+        log_bot_event(chat_id, "Отправлен первый вопрос о работе в ТТ", 0, 0)
         user_stages[chat_id] = 2
 
     elif user_stages[chat_id] == 2:
@@ -132,11 +152,15 @@ async def handle_business_message(message: Message):
         is_positive = any(word in user_text for word in POSITIVE_KEYWORDS) and not is_negative
 
         if is_positive:
-            await asyncio.sleep(180)
+            timer = 180
+            log_bot_event(chat_id, "Позитивный ответ лида. Ожидание перед отправкой ссылки.", timer, 0)
+            await asyncio.sleep(timer)
             await bot.send_message(chat_id=chat_id, text=FINAL_MESSAGE, business_connection_id=connection_id, link_preview_options=LinkPreviewOptions(is_disabled=False))
+            log_bot_event(chat_id, "Финиш: Успешно отправлена ссылка на канал!", 0, 1)
             user_stages[chat_id] = "COMPLETED"
         else:
             delay = random.randint(4, 8)
+            log_bot_event(chat_id, "Уточняющий вопрос о работе.", delay, 0)
             await asyncio.sleep(delay)
             await bot.send_message(chat_id=chat_id, text="а интересуешься ?", business_connection_id=connection_id)
             user_stages[chat_id] = 3
@@ -144,10 +168,14 @@ async def handle_business_message(message: Message):
     elif user_stages[chat_id] == 3:
         is_positive = any(word in user_text for word in POSITIVE_KEYWORDS) or "что" in user_text or "как" in user_text
         if is_positive:
-            await asyncio.sleep(180)
+            timer = 180
+            log_bot_event(chat_id, "Подтверждение от лида. Ожидание отправки ссылки.", timer, 0)
+            await asyncio.sleep(timer)
             await bot.send_message(chat_id=chat_id, text=FINAL_MESSAGE, business_connection_id=connection_id, link_preview_options=LinkPreviewOptions(is_disabled=False))
+            log_bot_event(chat_id, "Финиш: Успешно отправлена ссылка на канал!", 0, 1)
             user_stages[chat_id] = "COMPLETED"
         else:
+            log_bot_event(chat_id, "Диалог завершен без отправки ссылки.", 0, 0)
             user_stages[chat_id] = "COMPLETED"
 
 async def main():
@@ -172,8 +200,7 @@ if __name__ == "__main__":
                 INSERT OR IGNORE INTO bots (name, token, group_name, code_content, owner_username, owner_name) 
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (name, token, group, code, o_user, o_name))
-            # Принудительно обновляем код для существующих ботов, если он был обрезан
-            cursor.execute("UPDATE bots SET code_content = ? WHERE token = ? AND (code_content NOT LIKE '%FIRST_STEP_MESSAGES%' OR length(code_content) < 100)", (code, token))
+            cursor.execute("UPDATE bots SET code_content = ? WHERE token = ?", (code, token))
         except Exception:
             pass
             
@@ -376,7 +403,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
     bots = cursor.fetchall()
     
     today_str = datetime.now().strftime("%Y-%m-%d")
-    cursor.execute("SELECT COUNT(*), SUM(is_final_link) FROM bot_logs WHERE date(updated_at) = ?", (today_str,))
+    cursor.execute("SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE date(updated_at) = ?", (today_str,))
     today_stats = cursor.fetchone()
     total_today = today_stats[0] or 0
     links_today = today_stats[1] or 0
@@ -388,7 +415,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
         d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         d_label = (datetime.now() - timedelta(days=i)).strftime("%d.%m")
         chart_labels.append(d_label)
-        cursor.execute("SELECT COUNT(*), SUM(is_final_link) FROM bot_logs WHERE date(updated_at) = ?", (d,))
+        cursor.execute("SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE date(updated_at) = ?", (d,))
         res = cursor.fetchone()
         chart_messages.append(res[0] or 0)
         chart_links.append(res[1] or 0)
@@ -682,14 +709,14 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
     cursor.execute("SELECT name, token, group_name, code_content, owner_username, owner_name, owner_avatar FROM bots WHERE id = ?", (bot_id,))
     bot = cursor.fetchone()
     
-    cursor.execute("SELECT lead_id, status_text, timer_sec, updated_at FROM bot_logs WHERE bot_id = ?", (bot_id,))
+    cursor.execute("SELECT lead_id, status_text, timer_sec, updated_at FROM bot_logs WHERE bot_id = ? ORDER BY updated_at DESC", (bot_id,))
     logs = cursor.fetchall()
 
     daily_stats_html = ""
     for i in range(5):
         d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         d_label = (datetime.now() - timedelta(days=i)).strftime("%d.%m.%Y")
-        cursor.execute("SELECT COUNT(*), SUM(is_final_link) FROM bot_logs WHERE bot_id = ? AND date(updated_at) = ?", (bot_id, d))
+        cursor.execute("SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE bot_id = ? AND date(updated_at) = ?", (bot_id, d))
         res = cursor.fetchone()
         msgs = res[0] or 0
         links = res[1] or 0
@@ -790,14 +817,12 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 </form>
             </div>
 
-            <!-- 3 Вкладки (Логи, Статистика, Код) -->
             <div class="grid grid-cols-3 gap-1 bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
                 <button onclick="switchTab('logs')" id="btn-logs" class="py-2 px-1 rounded-xl text-[11px] font-semibold bg-emerald-500 text-gray-950 font-bold transition text-center">📊 Логи</button>
                 <button onclick="switchTab('stats')" id="btn-stats" class="py-2 px-1 rounded-xl text-[11px] font-semibold text-gray-400 transition text-center">📈 Статистика</button>
                 <button onclick="switchTab('code')" id="btn-code" class="py-2 px-1 rounded-xl text-[11px] font-semibold text-gray-400 transition text-center">💻 Код</button>
             </div>
 
-            <!-- Вкладка 1: Логи -->
             <div id="tab-logs" class="space-y-3">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
                     <h3 class="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wider">👥 Текущие переписки и таймеры</h3>
@@ -805,7 +830,6 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 </div>
             </div>
 
-            <!-- Вкладка 2: Статистика -->
             <div id="tab-stats" class="hidden space-y-3">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
                     <h3 class="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wider">📅 Статистика по дням</h3>
@@ -813,12 +837,10 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 </div>
             </div>
 
-            <!-- Вкладка 3: Редактор кода -->
             <div id="tab-code" class="hidden">
                 <form action="/save-code/{bot_id}" method="POST" onsubmit="return confirmSave();" class="space-y-3">
                     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
                         <label class="block text-xs text-gray-400 mb-2">Полный исходный код бота (Python / Aiogram)</label>
-                        <!-- Широкое поле с прокруткой и высокой областью видимости -->
                         <div class="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 overflow-x-auto">
                             <textarea name="code_content" class="w-full min-h-[600px] bg-transparent text-xs font-mono text-emerald-400 focus:outline-none leading-relaxed whitespace-pre">{code_content}</textarea>
                         </div>
