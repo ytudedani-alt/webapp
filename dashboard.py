@@ -42,7 +42,115 @@ from aiohttp import web
 import aiohttp
 
 BOT_TOKEN = "TOKEN_PLACEHOLDER"
-print("Bot initialized")'''
+
+FIRST_STEP_MESSAGES = [
+    "Привет, ты искал работу в тт ?",
+    "привет! ты искал работу в ТТ?",
+]
+
+FINAL_MESSAGE = "Тогда давай я тебе лучше скину ссылку, там ты все увидишь\\n\\nhttps://t.me/+52YuDrXyAok4ODc6"
+
+POSITIVE_KEYWORDS = [
+    "да", "ага", "угу", "ну да", "вроде", "типа", "дап", "даа", "го", "+", 
+    "было дело", "хочу", "просил", "кто", "возможно", "может", "хз", "помню", 
+    "забыл", "какая", "что за", "а что", "зачем", "где", "как", "ищу", "работу",
+    "интересно", "интересуюсь", "можно", "расскажи", "почему бы и нет",
+    "работа", "что за работа", "какая работа", "расскажи подробнее"
+]
+
+NEGATIVE_KEYWORDS = [
+    "нет", "не", "неа", "не-а", "мимо", "нет спасибо", "не интересует", 
+    "нафиг", "пошел", "отвали", "не искал", "никакой"
+]
+
+user_stages = {}
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+async def handle_ping(request):
+    return web.Response(text="Bot is active")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"🌐 Веб-сервер запущен на порту {port}")
+
+async def self_ping():
+    render_url = os.environ.get("RENDER_EXTERNAL_URL", "https://alex-bot-1-alzq.onrender.com")
+    await asyncio.sleep(15)
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(render_url) as response:
+                    print(f"[PINGS] Статус: {response.status}")
+            except Exception as e:
+                print(f"[PINGS] Ошибка: {e}")
+            await asyncio.sleep(300)
+
+@dp.business_connection()
+async def handle_business_connection(connection: BusinessConnection):
+    print(f"[⇄] Подключение обновлено! Статус: {connection.is_enabled}")
+
+@dp.business_message()
+async def handle_business_message(message: Message):
+    if message.from_user and message.from_user.is_bot:
+        return
+    connection_id = message.business_connection_id
+    if not connection_id:
+        return
+    if message.from_user and message.from_user.id != message.chat.id:
+        return
+
+    chat_id = message.chat.id
+    user_text = (message.text or message.caption or "").strip().lower()
+
+    if user_stages.get(chat_id) == "COMPLETED":
+        return
+
+    if chat_id not in user_stages:
+        user_stages[chat_id] = 1
+        await asyncio.sleep(600)
+        reply_text = random.choice(FIRST_STEP_MESSAGES)
+        await bot.send_message(chat_id=chat_id, text=reply_text, business_connection_id=connection_id)
+        user_stages[chat_id] = 2
+
+    elif user_stages[chat_id] == 2:
+        words_in_text = user_text.split()
+        is_negative = any(kw in user_text for kw in NEGATIVE_KEYWORDS) or any(kw in words_in_text for kw in ["нет", "не", "неа"])
+        is_positive = any(word in user_text for word in POSITIVE_KEYWORDS) and not is_negative
+
+        if is_positive:
+            await asyncio.sleep(180)
+            await bot.send_message(chat_id=chat_id, text=FINAL_MESSAGE, business_connection_id=connection_id, link_preview_options=LinkPreviewOptions(is_disabled=False))
+            user_stages[chat_id] = "COMPLETED"
+        else:
+            delay = random.randint(4, 8)
+            await asyncio.sleep(delay)
+            await bot.send_message(chat_id=chat_id, text="а интересуешься ?", business_connection_id=connection_id)
+            user_stages[chat_id] = 3
+
+    elif user_stages[chat_id] == 3:
+        is_positive = any(word in user_text for word in POSITIVE_KEYWORDS) or "что" in user_text or "как" in user_text
+        if is_positive:
+            await asyncio.sleep(180)
+            await bot.send_message(chat_id=chat_id, text=FINAL_MESSAGE, business_connection_id=connection_id, link_preview_options=LinkPreviewOptions(is_disabled=False))
+            user_stages[chat_id] = "COMPLETED"
+        else:
+            user_stages[chat_id] = "COMPLETED"
+
+async def main():
+    await start_web_server()
+    asyncio.create_task(self_ping())
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())'''
 
     default_bots = [
         ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", full_code_alex),
@@ -64,7 +172,6 @@ print("Bot initialized")'''
 init_db()
 
 async def get_telegram_account_info(token: str):
-    """Получает информацию об аккаунте/боте Telegram и ссылку на аватарку"""
     account_info = {
         "username": "Неизвестно",
         "first_name": "Аккаунт",
@@ -72,7 +179,6 @@ async def get_telegram_account_info(token: str):
     }
     try:
         async with aiohttp.ClientSession() as session:
-            # Получаем информацию о боте
             async with session.get(f"https://api.telegram.org/bot{token}/getMe") as resp:
                 data = await resp.json()
                 if data.get("ok"):
@@ -80,7 +186,6 @@ async def get_telegram_account_info(token: str):
                     account_info["username"] = f"@{result.get('username', 'no_username')}"
                     account_info["first_name"] = result.get("first_name", "Бот")
 
-            # Получаем аватарку
             async with session.get(f"https://api.telegram.org/bot{token}/getUserProfilePhotos?limit=1") as resp:
                 data = await resp.json()
                 if data.get("ok") and data["result"]["total_count"] > 0:
@@ -356,8 +461,6 @@ async def bot_detail(bot_id: int):
         return RedirectResponse(url="/", status_code=303)
 
     name, token, group_name, code_content = bot
-
-    # Запрашиваем актуальную инфо Telegram (аватарку, юзернейм)
     tg_info = await get_telegram_account_info(token)
 
     logs_html = ""
@@ -391,7 +494,6 @@ async def bot_detail(bot_id: int):
                 <span class="text-xs text-gray-500">{group_name}</span>
             </div>
 
-            <!-- Блок подключенного Telegram-аккаунта -->
             <div class="bg-gradient-to-r from-blue-950/60 to-gray-900 border border-blue-500/20 rounded-2xl p-4 mb-4 shadow-xl flex items-center gap-3">
                 <img src="{tg_info['avatar_url']}" class="w-12 h-12 rounded-full border-2 border-blue-500/40 object-cover shadow-md">
                 <div class="overflow-hidden">
@@ -409,7 +511,6 @@ async def bot_detail(bot_id: int):
                 <button onclick="trySwitchToCode()" id="btn-code" class="w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition">💻 Редактор кода</button>
             </div>
 
-            <!-- Вкладка Логи -->
             <div id="tab-logs" class="space-y-3">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
                     <h3 class="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wider">👥 Текущие переписки и таймеры</h3>
@@ -417,12 +518,12 @@ async def bot_detail(bot_id: int):
                 </div>
             </div>
 
-            <!-- Вкладка Код -->
+            <!-- Вкладка Код с принудительной высотой и вертикальным скроллом для ПК -->
             <div id="tab-code" class="hidden">
                 <form action="/save-code/{bot_id}" method="POST" onsubmit="return confirmSave();" class="space-y-3">
                     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
                         <label class="block text-xs text-gray-400 mb-2">Полный исходный код бота (Python / Aiogram)</label>
-                        <textarea name="code_content" rows="20" class="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-mono text-green-400 focus:outline-none focus:border-blue-500 leading-relaxed">{code_content}</textarea>
+                        <textarea name="code_content" class="w-full h-96 bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-mono text-green-400 focus:outline-none focus:border-blue-500 leading-relaxed overflow-y-auto">{code_content}</textarea>
                     </div>
                     <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-sm font-semibold shadow-lg shadow-blue-600/30">💾 Сохранить и применить код</button>
                 </form>
