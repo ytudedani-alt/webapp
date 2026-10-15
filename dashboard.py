@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, Cookie, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 import sqlite3
 import os
@@ -212,8 +212,93 @@ async def manifest():
         "icons": [{"src": "https://cdn-icons-png.flaticon.com/512/6134/6134346.png", "sizes": "512x512", "type": "image/png"}]
     })
 
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(error: str = None):
+    err_html = f'<div class="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-xl text-xs text-center mb-4">{error}</div>' if error else ''
+    return f"""
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>Добро пожаловать | Вход</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            @keyframes float {{
+                0% {{ transform: translateY(0px) rotate(0deg); opacity: 0.3; }}
+                50% {{ transform: translateY(-20px) rotate(10deg); opacity: 0.8; }}
+                100% {{ transform: translateY(0px) rotate(0deg); opacity: 0.3; }}
+            }}
+            @keyframes pulse-glow {{
+                0%, 100% {{ transform: scale(1); opacity: 0.2; }}
+                50% {{ transform: scale(1.05); opacity: 0.4; }}
+            }}
+            .floating-element {{
+                animation: float 6s ease-in-out infinite;
+            }}
+            .floating-element-delayed {{
+                animation: float 8s ease-in-out infinite 2s;
+            }}
+            .glow-bg {{
+                animation: pulse-glow 4s ease-in-out infinite;
+            }}
+        </style>
+    </head>
+    <body class="bg-gray-950 text-gray-100 min-h-screen flex items-center justify-center p-4 relative overflow-hidden select-none">
+        
+        <!-- Анимированный фон с плавающими значками Telegram и деньгами -->
+        <div class="absolute inset-0 pointer-events-none overflow-hidden">
+            <div class="absolute -top-20 -left-20 w-72 h-72 bg-blue-600/20 rounded-full blur-3xl glow-bg"></div>
+            <div class="absolute -bottom-20 -right-20 w-72 h-72 bg-purple-600/20 rounded-full blur-3xl glow-bg"></div>
+            
+            <!-- Летающие элементы (Telegram и монеты) -->
+            <div class="absolute top-1/4 left-10 text-3xl floating-element">💎</div>
+            <div class="absolute top-1/5 right-12 text-4xl floating-element-delayed">✈️</div>
+            <div class="absolute bottom-1/4 left-16 text-3xl floating-element-delayed">💵</div>
+            <div class="absolute bottom-1/5 right-20 text-3xl floating-element">⭐️</div>
+            <div class="absolute top-1/2 right-6 text-2xl floating-element">💰</div>
+            <div class="absolute top-10 left-1/3 text-2xl floating-element-delayed">🚀</div>
+        </div>
+
+        <!-- Карточка авторизации -->
+        <div class="relative z-10 bg-gray-900/80 backdrop-blur-xl border border-gray-800 rounded-3xl p-8 w-full max-w-sm shadow-2xl">
+            <div class="text-center mb-6">
+                <div class="w-14 h-14 bg-blue-600/20 border border-blue-500/30 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-3 shadow-lg shadow-blue-500/20">
+                    🤖
+                </div>
+                <h1 class="text-xl font-bold text-white mb-1">Добро пожаловать</h1>
+                <p class="text-xs text-gray-400">Центр управления ботами и трафиком</p>
+            </div>
+            {err_html}
+            <form action="/login" method="POST" class="space-y-4">
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">Логин</label>
+                    <input type="text" name="username" required placeholder="Введите логин" class="w-full bg-gray-950/60 border border-gray-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">Пароль</label>
+                    <input type="password" name="password" required placeholder="••••••••" class="w-full bg-gray-950/60 border border-gray-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-sm font-semibold shadow-lg shadow-blue-600/30 transition transform active:scale-95">Войти в панель</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    """
+
+@app.post("/login")
+async def login_post(username: str = Form(...), password: str = Form(...)):
+    if username == "Gogoha" and password == "05056978":
+        response = RedirectResponse(url="/", status_code=303)
+        response.set_cookie(key="auth_token", value="gogoha_authenticated_session", httponly=True)
+        return response
+    return RedirectResponse(url="/login?error=Неверный логин или пароль", status_code=303)
+
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def dashboard(request: Request, auth_token: str = Cookie(None)):
+    if auth_token != "gogoha_authenticated_session":
+        return RedirectResponse(url="/login", status_code=303)
+
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     cursor.execute("SELECT id, name, token, group_name FROM bots")
@@ -447,7 +532,10 @@ async def dashboard(request: Request):
     return HTMLResponse(content=html_content)
 
 @app.get("/bot/{bot_id}", response_class=HTMLResponse)
-async def bot_detail(bot_id: int):
+async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
+    if auth_token != "gogoha_authenticated_session":
+        return RedirectResponse(url="/login", status_code=303)
+
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     cursor.execute("SELECT name, token, group_name, code_content FROM bots WHERE id = ?", (bot_id,))
@@ -518,7 +606,6 @@ async def bot_detail(bot_id: int):
                 </div>
             </div>
 
-            <!-- Вкладка Код с принудительной высотой и вертикальным скроллом для ПК -->
             <div id="tab-code" class="hidden">
                 <form action="/save-code/{bot_id}" method="POST" onsubmit="return confirmSave();" class="space-y-3">
                     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
@@ -559,7 +646,9 @@ async def bot_detail(bot_id: int):
     return HTMLResponse(content=html_content)
 
 @app.post("/add-bot")
-async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str = Form(...)):
+async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str = Form(...), auth_token: str = Cookie(None)):
+    if auth_token != "gogoha_authenticated_session":
+        return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     try:
@@ -572,11 +661,15 @@ async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/add-group")
-async def add_group(group_name: str = Form(...)):
+async def add_group(group_name: str = Form(...), auth_token: str = Cookie(None)):
+    if auth_token != "gogoha_authenticated_session":
+        return RedirectResponse(url="/login", status_code=303)
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/delete-group")
-async def delete_group(group_name: str = Form(...)):
+async def delete_group(group_name: str = Form(...), auth_token: str = Cookie(None)):
+    if auth_token != "gogoha_authenticated_session":
+        return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     cursor.execute("UPDATE bots SET group_name = 'Общие' WHERE group_name = ?", (group_name,))
@@ -585,7 +678,9 @@ async def delete_group(group_name: str = Form(...)):
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/remove-from-group")
-async def remove_from_group(bot_id: int = Form(...)):
+async def remove_from_group(bot_id: int = Form(...), auth_token: str = Cookie(None)):
+    if auth_token != "gogoha_authenticated_session":
+        return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     cursor.execute("UPDATE bots SET group_name = 'Общие' WHERE id = ?", (bot_id,))
@@ -594,7 +689,9 @@ async def remove_from_group(bot_id: int = Form(...)):
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/save-code/{bot_id}")
-async def save_code(bot_id: int, code_content: str = Form(...)):
+async def save_code(bot_id: int, code_content: str = Form(...), auth_token: str = Cookie(None)):
+    if auth_token != "gogoha_authenticated_session":
+        return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     cursor.execute("UPDATE bots SET code_content = ? WHERE id = ?", (code_content, bot_id))
