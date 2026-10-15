@@ -163,11 +163,7 @@ async def login_page(response: Response, error: str = None):
             for (let i = 0; i < count; i++) {{
                 const theta = Math.random() * Math.PI * 2;
                 const phi = Math.acos((Math.random() * 2) - 1);
-                particles.push({{
-                    theta: theta,
-                    phi: phi,
-                    radius: 130 + Math.random() * 20
-                }});
+                particles.push({{ theta, phi, radius: 130 + Math.random() * 20 }});
             }}
 
             const rings = [];
@@ -587,11 +583,11 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
         msgs = res[0] or 0
         links = res[1] or 0
         daily_stats_html += f"""
-        <div class="flex justify-between items-center bg-gray-950/60 border border-gray-800/60 rounded-xl p-2.5 mb-2 text-xs">
-            <span class="text-gray-300 font-medium">📅 {d_label}</span>
+        <div class="flex justify-between items-center bg-gray-900 border border-gray-800 rounded-2xl p-3.5 mb-2.5 text-xs shadow-md">
+            <span class="text-gray-300 font-semibold">📅 {d_label}</span>
             <div class="flex gap-4">
-                <span class="text-emerald-400">Лидам: <b>{msgs}</b></span>
-                <span class="text-purple-400">Ссылки: <b>{links}</b></span>
+                <span class="text-emerald-400">Лидам: <b class="text-white">{msgs}</b></span>
+                <span class="text-purple-400">Ссылки: <b class="text-white">{links}</b></span>
             </div>
         </div>
         """
@@ -683,29 +679,34 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 </form>
             </div>
 
-            <div class="flex bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
-                <button onclick="switchTab('logs')" id="btn-logs" class="w-1/2 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-gray-950 font-bold transition">📊 Трафик и логи</button>
-                <button onclick="switchTab('code')" id="btn-code" class="w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition">💻 Редактор кода</button>
+            <!-- 3 Вкладки (Трафик и логи, Статистика по дням, Редактор кода) -->
+            <div class="grid grid-cols-3 gap-1 bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
+                <button onclick="switchTab('logs')" id="btn-logs" class="py-2 px-1 rounded-xl text-[11px] font-semibold bg-emerald-500 text-gray-950 font-bold transition text-center">📊 Логи</button>
+                <button onclick="switchTab('stats')" id="btn-stats" class="py-2 px-1 rounded-xl text-[11px] font-semibold text-gray-400 transition text-center">📅 Стат</button>
+                <button onclick="switchTab('code')" id="btn-code" class="py-2 px-1 rounded-xl text-[11px] font-semibold text-gray-400 transition text-center">💻 Код</button>
             </div>
 
+            <!-- Вкладка 1: Логи -->
             <div id="tab-logs" class="space-y-3">
-                <!-- Статистика по дням без графика -->
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
-                    <h3 class="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wider">📅 Статистика по дням</h3>
-                    {daily_stats_html}
-                </div>
-
-                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
-                    <h3 class="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wider">👥 Активные переписки и таймеры</h3>
+                    <h3 class="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wider">👥 Текущие переписки и таймеры</h3>
                     {logs_html}
                 </div>
             </div>
 
+            <!-- Вкладка 2: Статистика по дням -->
+            <div id="tab-stats" class="hidden space-y-3">
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
+                    <h3 class="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wider">📅 Статистика по дням</h3>
+                    {daily_stats_html}
+                </div>
+            </div>
+
+            <!-- Вкладка 3: Редактор кода -->
             <div id="tab-code" class="hidden">
                 <form action="/save-code/{bot_id}" method="POST" onsubmit="return confirmSave();" class="space-y-3">
                     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
                         <label class="block text-xs text-gray-400 mb-2">Полный исходный код бота (Python / Aiogram)</label>
-                        <!-- Сделана полная прокрутка во все стороны и убраны ограничения высоты -->
                         <div class="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 overflow-x-auto">
                             <textarea name="code_content" class="w-full min-h-[500px] bg-transparent text-xs font-mono text-emerald-400 focus:outline-none leading-relaxed whitespace-pre">{code_content}</textarea>
                         </div>
@@ -732,17 +733,35 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 }}
 
                 function switchTab(tab) {{
+                    const logsTab = document.getElementById('tab-logs');
+                    const statsTab = document.getElementById('tab-stats');
+                    const codeTab = document.getElementById('tab-code');
+                    
+                    const btnLogs = document.getElementById('btn-logs');
+                    const btnStats = document.getElementById('btn-stats');
+                    const btnCode = document.getElementById('btn-code');
+
+                    logsTab.classList.add('hidden');
+                    statsTab.classList.add('hidden');
+                    codeTab.classList.add('hidden');
+
+                    btnLogs.className = 'py-2 px-1 rounded-xl text-[11px] font-semibold text-gray-400 transition text-center';
+                    btnStats.className = 'py-2 px-1 rounded-xl text-[11px] font-semibold text-gray-400 transition text-center';
+                    btnCode.className = 'py-2 px-1 rounded-xl text-[11px] font-semibold text-gray-400 transition text-center';
+
                     if (tab === 'logs') {{
-                        document.getElementById('tab-logs').classList.remove('hidden');
-                        document.getElementById('tab-code').classList.add('hidden');
-                        document.getElementById('btn-logs').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-gray-950 font-bold transition';
-                        document.getElementById('btn-code').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition';
+                        logsTab.classList.remove('hidden');
+                        btnLogs.className = 'py-2 px-1 rounded-xl text-[11px] font-semibold bg-emerald-500 text-gray-950 font-bold transition text-center';
+                    }} else if (tab === 'stats') {{
+                        statsTab.classList.remove('hidden');
+                        btnStats.className = 'py-2 px-1 rounded-xl text-[11px] font-semibold bg-emerald-500 text-gray-950 font-bold transition text-center';
                     }} else if (tab === 'code') {{
-                        if (confirm("Вы точно хотите перейти в редактор кода?")) {{
-                            document.getElementById('tab-code').classList.remove('hidden');
-                            document.getElementById('tab-logs').classList.add('hidden');
-                            document.getElementById('btn-code').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-gray-950 font-bold transition';
-                            document.getElementById('btn-logs').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition';
+                        if (confirm("Вы хотите перейти в редактор кода?")) {{
+                            codeTab.classList.remove('hidden');
+                            btnCode.className = 'py-2 px-1 rounded-xl text-[11px] font-semibold bg-emerald-500 text-gray-950 font-bold transition text-center';
+                        }} else {{
+                            logsTab.classList.remove('hidden');
+                            btnLogs.className = 'py-2 px-1 rounded-xl text-[11px] font-semibold bg-emerald-500 text-gray-950 font-bold transition text-center';
                         }}
                     }}
                 }}
