@@ -17,7 +17,10 @@ def init_db():
             name TEXT,
             token TEXT UNIQUE,
             group_name TEXT DEFAULT 'Общие',
-            code_content TEXT DEFAULT ''
+            code_content TEXT DEFAULT '',
+            owner_username TEXT DEFAULT '@Gogoha',
+            owner_name TEXT DEFAULT 'Gogoha',
+            owner_avatar TEXT DEFAULT 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'
         )
     """)
     
@@ -42,115 +45,7 @@ from aiohttp import web
 import aiohttp
 
 BOT_TOKEN = "TOKEN_PLACEHOLDER"
-
-FIRST_STEP_MESSAGES = [
-    "Привет, ты искал работу в тт ?",
-    "привет! ты искал работу в ТТ?",
-]
-
-FINAL_MESSAGE = "Тогда давай я тебе лучше скину ссылку, там ты все увидишь\\n\\nhttps://t.me/+52YuDrXyAok4ODc6"
-
-POSITIVE_KEYWORDS = [
-    "да", "ага", "угу", "ну да", "вроде", "типа", "дап", "даа", "го", "+", 
-    "было дело", "хочу", "просил", "кто", "возможно", "может", "хз", "помню", 
-    "забыл", "какая", "что за", "а что", "зачем", "где", "как", "ищу", "работу",
-    "интересно", "интересуюсь", "можно", "расскажи", "почему бы и нет",
-    "работа", "что за работа", "какая работа", "расскажи подробнее"
-]
-
-NEGATIVE_KEYWORDS = [
-    "нет", "не", "неа", "не-а", "мимо", "нет спасибо", "не интересует", 
-    "нафиг", "пошел", "отвали", "не искал", "никакой"
-]
-
-user_stages = {}
-
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
-
-async def handle_ping(request):
-    return web.Response(text="Bot is active")
-
-async def start_web_server():
-    app = web.Application()
-    app.router.add_get("/", handle_ping)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    port = int(os.environ.get("PORT", 10000))
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    print(f"🌐 Веб-сервер запущен на порту {port}")
-
-async def self_ping():
-    render_url = os.environ.get("RENDER_EXTERNAL_URL", "https://alex-bot-1-alzq.onrender.com")
-    await asyncio.sleep(15)
-    async with aiohttp.ClientSession() as session:
-        while True:
-            try:
-                async with session.get(render_url) as response:
-                    print(f"[PINGS] Статус: {response.status}")
-            except Exception as e:
-                print(f"[PINGS] Ошибка: {e}")
-            await asyncio.sleep(300)
-
-@dp.business_connection()
-async def handle_business_connection(connection: BusinessConnection):
-    print(f"[⇄] Подключение обновлено! Статус: {connection.is_enabled}")
-
-@dp.business_message()
-async def handle_business_message(message: Message):
-    if message.from_user and message.from_user.is_bot:
-        return
-    connection_id = message.business_connection_id
-    if not connection_id:
-        return
-    if message.from_user and message.from_user.id != message.chat.id:
-        return
-
-    chat_id = message.chat.id
-    user_text = (message.text or message.caption or "").strip().lower()
-
-    if user_stages.get(chat_id) == "COMPLETED":
-        return
-
-    if chat_id not in user_stages:
-        user_stages[chat_id] = 1
-        await asyncio.sleep(600)
-        reply_text = random.choice(FIRST_STEP_MESSAGES)
-        await bot.send_message(chat_id=chat_id, text=reply_text, business_connection_id=connection_id)
-        user_stages[chat_id] = 2
-
-    elif user_stages[chat_id] == 2:
-        words_in_text = user_text.split()
-        is_negative = any(kw in user_text for kw in NEGATIVE_KEYWORDS) or any(kw in words_in_text for kw in ["нет", "не", "неа"])
-        is_positive = any(word in user_text for word in POSITIVE_KEYWORDS) and not is_negative
-
-        if is_positive:
-            await asyncio.sleep(180)
-            await bot.send_message(chat_id=chat_id, text=FINAL_MESSAGE, business_connection_id=connection_id, link_preview_options=LinkPreviewOptions(is_disabled=False))
-            user_stages[chat_id] = "COMPLETED"
-        else:
-            delay = random.randint(4, 8)
-            await asyncio.sleep(delay)
-            await bot.send_message(chat_id=chat_id, text="а интересуешься ?", business_connection_id=connection_id)
-            user_stages[chat_id] = 3
-
-    elif user_stages[chat_id] == 3:
-        is_positive = any(word in user_text for word in POSITIVE_KEYWORDS) or "что" in user_text or "как" in user_text
-        if is_positive:
-            await asyncio.sleep(180)
-            await bot.send_message(chat_id=chat_id, text=FINAL_MESSAGE, business_connection_id=connection_id, link_preview_options=LinkPreviewOptions(is_disabled=False))
-            user_stages[chat_id] = "COMPLETED"
-        else:
-            user_stages[chat_id] = "COMPLETED"
-
-async def main():
-    await start_web_server()
-    asyncio.create_task(self_ping())
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())'''
+print("Bot initialized")'''
 
     default_bots = [
         ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", full_code_alex),
@@ -170,35 +65,6 @@ if __name__ == "__main__":
     conn.close()
 
 init_db()
-
-async def get_telegram_account_info(token: str):
-    account_info = {
-        "username": "Неизвестно",
-        "first_name": "Аккаунт",
-        "avatar_url": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-    }
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"https://api.telegram.org/bot{token}/getMe") as resp:
-                data = await resp.json()
-                if data.get("ok"):
-                    result = data["result"]
-                    account_info["username"] = f"@{result.get('username', 'no_username')}"
-                    account_info["first_name"] = result.get("first_name", "Бот")
-
-            async with session.get(f"https://api.telegram.org/bot{token}/getUserProfilePhotos?limit=1") as resp:
-                data = await resp.json()
-                if data.get("ok") and data["result"]["total_count"] > 0:
-                    file_id = data["result"]["photos"][0][0]["file_id"]
-                    async with session.get(f"https://api.telegram.org/bot{token}/getFile?file_id={file_id}") as file_resp:
-                        file_data = await file_resp.json()
-                        if file_data.get("ok"):
-                            file_path = file_data["result"]["file_path"]
-                            account_info["avatar_url"] = f"https://api.telegram.org/file/bot{token}/{file_path}"
-    except Exception as e:
-        print(f"Ошибка получения инфо Telegram: {e}")
-        
-    return account_info
 
 @app.get("/manifest.json")
 async def manifest():
@@ -233,39 +99,23 @@ async def login_page(error: str = None):
                 0%, 100% {{ transform: scale(1); opacity: 0.2; }}
                 50% {{ transform: scale(1.05); opacity: 0.4; }}
             }}
-            .floating-element {{
-                animation: float 6s ease-in-out infinite;
-            }}
-            .floating-element-delayed {{
-                animation: float 8s ease-in-out infinite 2s;
-            }}
-            .glow-bg {{
-                animation: pulse-glow 4s ease-in-out infinite;
-            }}
+            .floating-element {{ animation: float 6s ease-in-out infinite; }}
+            .floating-element-delayed {{ animation: float 8s ease-in-out infinite 2s; }}
+            .glow-bg {{ animation: pulse-glow 4s ease-in-out infinite; }}
         </style>
     </head>
     <body class="bg-gray-950 text-gray-100 min-h-screen flex items-center justify-center p-4 relative overflow-hidden select-none">
-        
-        <!-- Анимированный фон с плавающими значками Telegram и деньгами -->
         <div class="absolute inset-0 pointer-events-none overflow-hidden">
             <div class="absolute -top-20 -left-20 w-72 h-72 bg-blue-600/20 rounded-full blur-3xl glow-bg"></div>
             <div class="absolute -bottom-20 -right-20 w-72 h-72 bg-purple-600/20 rounded-full blur-3xl glow-bg"></div>
-            
-            <!-- Летающие элементы (Telegram и монеты) -->
             <div class="absolute top-1/4 left-10 text-3xl floating-element">💎</div>
             <div class="absolute top-1/5 right-12 text-4xl floating-element-delayed">✈️</div>
             <div class="absolute bottom-1/4 left-16 text-3xl floating-element-delayed">💵</div>
             <div class="absolute bottom-1/5 right-20 text-3xl floating-element">⭐️</div>
-            <div class="absolute top-1/2 right-6 text-2xl floating-element">💰</div>
-            <div class="absolute top-10 left-1/3 text-2xl floating-element-delayed">🚀</div>
         </div>
-
-        <!-- Карточка авторизации -->
         <div class="relative z-10 bg-gray-900/80 backdrop-blur-xl border border-gray-800 rounded-3xl p-8 w-full max-w-sm shadow-2xl">
             <div class="text-center mb-6">
-                <div class="w-14 h-14 bg-blue-600/20 border border-blue-500/30 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-3 shadow-lg shadow-blue-500/20">
-                    🤖
-                </div>
+                <div class="w-14 h-14 bg-blue-600/20 border border-blue-500/30 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-3 shadow-lg shadow-blue-500/20">🤖</div>
                 <h1 class="text-xl font-bold text-white mb-1">Добро пожаловать</h1>
                 <p class="text-xs text-gray-400">Центр управления ботами и трафиком</p>
             </div>
@@ -317,7 +167,6 @@ async def dashboard(request: Request, auth_token: str = Cookie(None)):
         d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         d_label = (datetime.now() - timedelta(days=i)).strftime("%d.%m")
         chart_labels.append(d_label)
-        
         cursor.execute("SELECT COUNT(*), SUM(is_final_link) FROM bot_logs WHERE date(updated_at) = ?", (d,))
         res = cursor.fetchone()
         chart_messages.append(res[0] or 0)
@@ -335,14 +184,12 @@ async def dashboard(request: Request, auth_token: str = Cookie(None)):
     for group_name, g_bots in groups.items():
         bots_cards = ""
         for b_id, b_name, b_token in g_bots:
-            remove_btn = ""
-            if group_name != "Общие":
-                remove_btn = f"""
-                <form action="/remove-from-group" method="POST" class="inline">
-                    <input type="hidden" name="bot_id" value="{b_id}">
-                    <button type="submit" class="text-xs text-gray-500 hover:text-red-400 p-1" title="Убрать из папки">❌</button>
-                </form>
-                """
+            remove_btn = f"""
+            <form action="/remove-from-group" method="POST" class="inline">
+                <input type="hidden" name="bot_id" value="{b_id}">
+                <button type="submit" class="text-xs text-gray-500 hover:text-red-400 p-1" title="Убрать из папки">❌</button>
+            </form>
+            """ if group_name != "Общие" else ""
 
             bots_cards += f"""
             <div class="bg-gray-900 border border-gray-800 hover:border-blue-500/50 rounded-2xl p-4 shadow-lg mb-3 transition flex justify-between items-center">
@@ -357,17 +204,15 @@ async def dashboard(request: Request, auth_token: str = Cookie(None)):
             </div>
             """
         
-        action_buttons = ""
-        if group_name != "Общие":
-            action_buttons = f"""
-            <div class="flex items-center gap-1">
-                <button onclick="openAddModalToGroup('{group_name}')" class="text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-lg font-bold" title="Добавить бота">+</button>
-                <form action="/delete-group" method="POST" onsubmit="return confirm('Удалить папку {group_name}?');" class="inline">
-                    <input type="hidden" name="group_name" value="{group_name}">
-                    <button type="submit" class="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-lg" title="Удалить">🗑</button>
-                </form>
-            </div>
-            """
+        action_buttons = f"""
+        <div class="flex items-center gap-1">
+            <button onclick="openAddModalToGroup('{group_name}')" class="text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-lg font-bold" title="Добавить бота">+</button>
+            <form action="/delete-group" method="POST" onsubmit="return confirm('Удалить папку {group_name}?');" class="inline">
+                <input type="hidden" name="group_name" value="{group_name}">
+                <button type="submit" class="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-lg" title="Удалить">🗑</button>
+            </form>
+        </div>
+        """ if group_name != "Общие" else ""
 
         groups_html += f"""
         <div class="mb-6">
@@ -538,7 +383,7 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
 
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT name, token, group_name, code_content FROM bots WHERE id = ?", (bot_id,))
+    cursor.execute("SELECT name, token, group_name, code_content, owner_username, owner_name, owner_avatar FROM bots WHERE id = ?", (bot_id,))
     bot = cursor.fetchone()
     
     cursor.execute("SELECT lead_id, status_text, timer_sec, updated_at FROM bot_logs WHERE bot_id = ?", (bot_id,))
@@ -548,8 +393,7 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
     if not bot:
         return RedirectResponse(url="/", status_code=303)
 
-    name, token, group_name, code_content = bot
-    tg_info = await get_telegram_account_info(token)
+    name, token, group_name, code_content, owner_username, owner_name, owner_avatar = bot
 
     logs_html = ""
     for lead_id, status_text, timer_sec, updated_at in logs:
@@ -582,16 +426,43 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
                 <span class="text-xs text-gray-500">{group_name}</span>
             </div>
 
-            <div class="bg-gradient-to-r from-blue-950/60 to-gray-900 border border-blue-500/20 rounded-2xl p-4 mb-4 shadow-xl flex items-center gap-3">
-                <img src="{tg_info['avatar_url']}" class="w-12 h-12 rounded-full border-2 border-blue-500/40 object-cover shadow-md">
-                <div class="overflow-hidden">
-                    <div class="flex items-center gap-2">
-                        <h2 class="text-sm font-bold text-white truncate">{tg_info['first_name']}</h2>
-                        <span class="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-semibold">Подключен</span>
-                    </div>
-                    <p class="text-xs text-blue-400 font-mono mt-0.5">{tg_info['username']}</p>
-                    <p class="text-[10px] text-gray-500 truncate font-mono mt-0.5">Token: {token[:12]}...</p>
+            <!-- Плашка привязанного Telegram-аккаунта (с возможностью редактирования) -->
+            <div class="bg-gradient-to-r from-blue-950/60 to-gray-900 border border-blue-500/20 rounded-2xl p-4 mb-4 shadow-xl">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">👤 Привязанный Telegram аккаунт</span>
+                    <button onclick="toggleEditOwner()" class="text-[10px] text-blue-400 hover:underline">Изменить</button>
                 </div>
+                
+                <div id="owner-display" class="flex items-center gap-3">
+                    <img src="{owner_avatar}" class="w-12 h-12 rounded-full border-2 border-blue-500/40 object-cover shadow-md">
+                    <div class="overflow-hidden">
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-sm font-bold text-white truncate">{owner_name}</h2>
+                            <span class="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-semibold">Активен</span>
+                        </div>
+                        <p class="text-xs text-blue-400 font-mono mt-0.5">{owner_username}</p>
+                    </div>
+                </div>
+
+                <!-- Форма изменения владельца -->
+                <form id="owner-form" action="/update-owner/{bot_id}" method="POST" class="hidden space-y-2 mt-2 pt-2 border-t border-gray-800">
+                    <div>
+                        <label class="block text-[10px] text-gray-400 mb-1">Имя аккаунта</label>
+                        <input type="text" name="owner_name" value="{owner_name}" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-white">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-gray-400 mb-1">Юзернейм (@username)</label>
+                        <input type="text" name="owner_username" value="{owner_username}" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-white">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-gray-400 mb-1">Ссылка на аватарку (фото)</label>
+                        <input type="text" name="owner_avatar" value="{owner_avatar}" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-white">
+                    </div>
+                    <div class="flex gap-2 pt-1">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Сохранить</button>
+                        <button type="button" onclick="toggleEditOwner()" class="bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg text-xs">Отмена</button>
+                    </div>
+                </form>
             </div>
 
             <div class="flex bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
@@ -617,6 +488,18 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
             </div>
 
             <script>
+                function toggleEditOwner() {{
+                    const display = document.getElementById('owner-display');
+                    const form = document.getElementById('owner-form');
+                    if (form.classList.contains('hidden')) {{
+                        form.classList.remove('hidden');
+                        display.classList.add('hidden');
+                    }} else {{
+                        form.classList.add('hidden');
+                        display.classList.remove('hidden');
+                    }}
+                }}
+
                 function trySwitchToCode() {{
                     if (confirm("Вы точно хотите редактировать код?")) {{
                         document.getElementById('tab-code').classList.remove('hidden');
@@ -644,6 +527,18 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
     </html>
     """
     return HTMLResponse(content=html_content)
+
+@app.post("/update-owner/{bot_id}")
+async def update_owner(bot_id: int, owner_name: str = Form(...), owner_username: str = Form(...), owner_avatar: str = Form(...), auth_token: str = Cookie(None)):
+    if auth_token != "gogoha_authenticated_session":
+        return RedirectResponse(url="/login", status_code=303)
+    conn = sqlite3.connect("dashboard_bots.db")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE bots SET owner_name = ?, owner_username = ?, owner_avatar = ? WHERE id = ?", 
+                   (owner_name.strip(), owner_username.strip(), owner_avatar.strip(), bot_id))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url=f"/bot/{bot_id}", status_code=303)
 
 @app.post("/add-bot")
 async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str = Form(...), auth_token: str = Cookie(None)):
