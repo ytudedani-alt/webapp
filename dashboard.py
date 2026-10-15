@@ -16,6 +16,22 @@ def init_dashboard_db():
         )
     """)
     conn.commit()
+
+    # Автоматически добавляем все 5 твоих рабочих ботов
+    default_bots = [
+        ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g"),
+        ("Alex Bot 2", "8989087015:AAHAkK_e-fcIQFLkrfQgs4-ZhrKXcJft1G4"),
+        ("Spanh Bot 1", "8902861284:AAEUL5DImSMqKSYKWdJ_uqlbYdKgBfF9Bq4"),
+        ("Spanh Bot 2", "8833046723:AAG_el4XirqdoMZLVcZdNWypVzanJkETGnY"),
+        ("Flash Manager Bot", "8586984485:AAE4m73JZGf3s5yfExriJP_C-otyiAWZu8I")
+    ]
+    for name, token in default_bots:
+        try:
+            cursor.execute("INSERT OR IGNORE INTO bots (name, token) VALUES (?, ?)", (name, token))
+        except Exception:
+            pass
+            
+    conn.commit()
     conn.close()
 
 init_dashboard_db()
@@ -58,9 +74,6 @@ async def dashboard(request: Request):
         </div>
         """
 
-    if not bots:
-        bots_html = "<p class='text-center text-gray-500 text-xs py-4'>Пока нет добавленных ботов</p>"
-
     html_content = f"""
     <!DOCTYPE html>
     <html lang="ru">
@@ -79,7 +92,7 @@ async def dashboard(request: Request):
             <header class="flex justify-between items-center mb-6 pt-2">
                 <div>
                     <h1 class="text-xl font-bold text-white">📱 Мои Боты</h1>
-                    <p class="text-xs text-gray-400">Центр управления аккаунтами</p>
+                    <p class="text-xs text-gray-400">Центр управления аккаунтами ({len(bots)} шт.)</p>
                 </div>
                 <button onclick="openModal()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/30 flex items-center gap-1">
                     + Добавить
@@ -95,7 +108,7 @@ async def dashboard(request: Request):
                     <h3 class="text-lg font-bold text-white mb-4">➕ Новый бот / аккаунт</h3>
                     <form action="/add-bot" method="POST" class="space-y-4">
                         <div>
-                            <label class="block text-xs text-gray-400 mb-1">Название (например, Бот 3)</label>
+                            <label class="block text-xs text-gray-400 mb-1">Название (например, Бот 6)</label>
                             <input type="text" name="name" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500">
                         </div>
                         <div>
