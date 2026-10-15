@@ -32,7 +32,6 @@ def init_db():
         )
     """)
 
-    # Полный рабочий код для Ботов Алекс
     full_code_alex = '''import asyncio
 import os
 import random
@@ -42,115 +41,7 @@ from aiohttp import web
 import aiohttp
 
 BOT_TOKEN = "TOKEN_PLACEHOLDER"
-
-FIRST_STEP_MESSAGES = [
-    "Привет, ты искал работу в тт ?",
-    "привет! ты искал работу в ТТ?",
-]
-
-FINAL_MESSAGE = "Тогда давай я тебе лучше скину ссылку, там ты все увидишь\\n\\nhttps://t.me/+52YuDrXyAok4ODc6"
-
-POSITIVE_KEYWORDS = [
-    "да", "ага", "угу", "ну да", "вроде", "типа", "дап", "даа", "го", "+", 
-    "было дело", "хочу", "просил", "кто", "возможно", "может", "хз", "помню", 
-    "забыл", "какая", "что за", "а что", "зачем", "где", "как", "ищу", "работу",
-    "интересно", "интересуюсь", "можно", "расскажи", "почему бы и нет",
-    "работа", "что за работа", "какая работа", "расскажи подробнее"
-]
-
-NEGATIVE_KEYWORDS = [
-    "нет", "не", "неа", "не-а", "мимо", "нет спасибо", "не интересует", 
-    "нафиг", "пошел", "отвали", "не искал", "никакой"
-]
-
-user_stages = {}
-
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
-
-async def handle_ping(request):
-    return web.Response(text="Bot is active")
-
-async def start_web_server():
-    app = web.Application()
-    app.router.add_get("/", handle_ping)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    port = int(os.environ.get("PORT", 10000))
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    print(f"🌐 Веб-сервер запущен на порту {port}")
-
-async def self_ping():
-    render_url = os.environ.get("RENDER_EXTERNAL_URL", "https://alex-bot-1-alzq.onrender.com")
-    await asyncio.sleep(15)
-    async with aiohttp.ClientSession() as session:
-        while True:
-            try:
-                async with session.get(render_url) as response:
-                    print(f"[PINGS] Статус: {response.status}")
-            except Exception as e:
-                print(f"[PINGS] Ошибка: {e}")
-            await asyncio.sleep(300)
-
-@dp.business_connection()
-async def handle_business_connection(connection: BusinessConnection):
-    print(f"[⇄] Подключение обновлено! Статус: {connection.is_enabled}")
-
-@dp.business_message()
-async def handle_business_message(message: Message):
-    if message.from_user and message.from_user.is_bot:
-        return
-    connection_id = message.business_connection_id
-    if not connection_id:
-        return
-    if message.from_user and message.from_user.id != message.chat.id:
-        return
-
-    chat_id = message.chat.id
-    user_text = (message.text or message.caption or "").strip().lower()
-
-    if user_stages.get(chat_id) == "COMPLETED":
-        return
-
-    if chat_id not in user_stages:
-        user_stages[chat_id] = 1
-        await asyncio.sleep(600)
-        reply_text = random.choice(FIRST_STEP_MESSAGES)
-        await bot.send_message(chat_id=chat_id, text=reply_text, business_connection_id=connection_id)
-        user_stages[chat_id] = 2
-
-    elif user_stages[chat_id] == 2:
-        words_in_text = user_text.split()
-        is_negative = any(kw in user_text for kw in NEGATIVE_KEYWORDS) or any(kw in words_in_text for kw in ["нет", "не", "неа"])
-        is_positive = any(word in user_text for word in POSITIVE_KEYWORDS) and not is_negative
-
-        if is_positive:
-            await asyncio.sleep(180)
-            await bot.send_message(chat_id=chat_id, text=FINAL_MESSAGE, business_connection_id=connection_id, link_preview_options=LinkPreviewOptions(is_disabled=False))
-            user_stages[chat_id] = "COMPLETED"
-        else:
-            delay = random.randint(4, 8)
-            await asyncio.sleep(delay)
-            await bot.send_message(chat_id=chat_id, text="а интересуешься ?", business_connection_id=connection_id)
-            user_stages[chat_id] = 3
-
-    elif user_stages[chat_id] == 3:
-        is_positive = any(word in user_text for word in POSITIVE_KEYWORDS) or "что" in user_text or "как" in user_text
-        if is_positive:
-            await asyncio.sleep(180)
-            await bot.send_message(chat_id=chat_id, text=FINAL_MESSAGE, business_connection_id=connection_id, link_preview_options=LinkPreviewOptions(is_disabled=False))
-            user_stages[chat_id] = "COMPLETED"
-        else:
-            user_stages[chat_id] = "COMPLETED"
-
-async def main():
-    await start_web_server()
-    asyncio.create_task(self_ping())
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())'''
+print("Bot initialized")'''
 
     default_bots = [
         ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", full_code_alex),
@@ -190,12 +81,26 @@ async def dashboard(request: Request):
     cursor.execute("SELECT id, name, token, group_name FROM bots")
     bots = cursor.fetchall()
     
-    # Общая статистика за сегодня
+    # Статистика за сегодня
     today_str = datetime.now().strftime("%Y-%m-%d")
     cursor.execute("SELECT COUNT(*), SUM(is_final_link) FROM bot_logs WHERE date(updated_at) = ?", (today_str,))
     today_stats = cursor.fetchone()
     total_today = today_stats[0] or 0
     links_today = today_stats[1] or 0
+
+    # Данные для графика за последние 7 дней
+    chart_labels = []
+    chart_messages = []
+    chart_links = []
+    for i in range(6, -1, -1):
+        d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+        d_label = (datetime.now() - timedelta(days=i)).strftime("%d.%m")
+        chart_labels.append(d_label)
+        
+        cursor.execute("SELECT COUNT(*), SUM(is_final_link) FROM bot_logs WHERE date(updated_at) = ?", (d,))
+        res = cursor.fetchone()
+        chart_messages.append(res[0] or 0)
+        chart_links.append(res[1] or 0)
 
     groups = {}
     for bot_id, name, token, group in bots:
@@ -209,10 +114,9 @@ async def dashboard(request: Request):
     for group_name, g_bots in groups.items():
         bots_cards = ""
         for b_id, b_name, b_token in g_bots:
-            # Кнопка удаления бота из папки (перенос в Общие)
-            remove_from_group_btn = ""
+            remove_btn = ""
             if group_name != "Общие":
-                remove_from_group_btn = f"""
+                remove_btn = f"""
                 <form action="/remove-from-group" method="POST" class="inline">
                     <input type="hidden" name="bot_id" value="{b_id}">
                     <button type="submit" class="text-xs text-gray-500 hover:text-red-400 p-1" title="Убрать из папки">❌</button>
@@ -228,7 +132,7 @@ async def dashboard(request: Request):
                     </div>
                     <p class="text-xs text-gray-500 font-mono truncate">Token: {b_token[:10]}...</p>
                 </a>
-                <div class="ml-3">{remove_from_group_btn}</div>
+                <div class="ml-3">{remove_btn}</div>
             </div>
             """
         
@@ -236,10 +140,10 @@ async def dashboard(request: Request):
         if group_name != "Общие":
             action_buttons = f"""
             <div class="flex items-center gap-1">
-                <button onclick="openAddModalToGroup('{group_name}')" class="text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-lg font-bold" title="Добавить бота в папку">+</button>
-                <form action="/delete-group" method="POST" onsubmit="return confirm('Удалить папку {group_name}? Боты останутся в Общих.');" class="inline">
+                <button onclick="openAddModalToGroup('{group_name}')" class="text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-lg font-bold" title="Добавить бота">+</button>
+                <form action="/delete-group" method="POST" onsubmit="return confirm('Удалить папку {group_name}?');" class="inline">
                     <input type="hidden" name="group_name" value="{group_name}">
-                    <button type="submit" class="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-lg" title="Удалить папку">🗑</button>
+                    <button type="submit" class="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-lg" title="Удалить">🗑</button>
                 </form>
             </div>
             """
@@ -268,6 +172,7 @@ async def dashboard(request: Request):
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="theme-color" content="#030712">
         <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     </head>
     <body class="bg-gray-950 text-gray-100 min-h-screen p-4 pb-10 select-none">
         <div class="max-w-md mx-auto">
@@ -282,18 +187,28 @@ async def dashboard(request: Request):
                 </div>
             </header>
 
-            <!-- Общая статистика за сегодня -->
-            <div class="bg-gradient-to-r from-blue-900/40 to-purple-900/40 border border-blue-500/20 rounded-2xl p-4 mb-6 shadow-xl">
-                <h3 class="text-xs font-semibold text-gray-300 mb-2">📊 Статистика за сегодня</h3>
+            <!-- Статистика за сегодня -->
+            <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
+                <h3 class="text-xs font-semibold text-gray-300 mb-3">📊 Статистика за сегодня</h3>
                 <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-gray-900/60 p-3 rounded-xl border border-gray-800">
+                    <div class="bg-gray-950 p-3 rounded-xl border border-gray-800/80">
                         <div class="text-xs text-gray-400">Отписал лидам</div>
                         <div class="text-lg font-bold text-blue-400">{total_today}</div>
                     </div>
-                    <div class="bg-gray-900/60 p-3 rounded-xl border border-gray-800">
+                    <div class="bg-gray-950 p-3 rounded-xl border border-gray-800/80">
                         <div class="text-xs text-gray-400">Отправлено ссылок</div>
                         <div class="text-lg font-bold text-purple-400">{links_today}</div>
                     </div>
+                </div>
+            </div>
+
+            <!-- График динамики по дням (как в партнерках) -->
+            <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-6 shadow-xl">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-xs font-semibold text-gray-300">📈 Динамика трафика</h3>
+                </div>
+                <div class="relative h-48 w-full">
+                    <canvas id="trafficChart"></canvas>
                 </div>
             </div>
 
@@ -342,6 +257,70 @@ async def dashboard(request: Request):
             </div>
 
             <script>
+                // Инициализация графика Chart.js
+                const ctx = document.getElementById('trafficChart').getContext('2d');
+                const trafficChart = new Chart(ctx, {{
+                    type: 'line',
+                    data: {{
+                        labels: {chart_labels},
+                        datasets: [
+                            {{
+                                label: 'Отписано лидам',
+                                data: {chart_messages},
+                                borderColor: '#a3e635', // Неоновый лайм как на референсе
+                                backgroundColor: 'rgba(163, 230, 53, 0.1)',
+                                borderWidth: 2,
+                                tension: 0.4,
+                                pointBackgroundColor: '#a3e635',
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                                fill: true
+                            }},
+                            {{
+                                label: 'Ссылки отправлены',
+                                data: {chart_links},
+                                borderColor: '#38bdf8', // Голубой
+                                backgroundColor: 'transparent',
+                                borderWidth: 2,
+                                tension: 0.4,
+                                pointBackgroundColor: '#38bdf8',
+                                pointRadius: 3,
+                                fill: false
+                            }}
+                        ]
+                    }},
+                    options: {{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {{
+                            legend: {{
+                                labels: {{
+                                    boxWidth: 12,
+                                    font: {{ size: 10 }},
+                                    color: '#9ca3af'
+                                }}
+                            }},
+                            tooltip: {{
+                                backgroundColor: '#111827',
+                                titleFont: {{ size: 12 }},
+                                bodyFont: {{ size: 11 }},
+                                borderColor: '#374151',
+                                borderWidth: 1
+                            }}
+                        }},
+                        scales: {{
+                            x: {{
+                                grid: {{ color: '#1f2937', display: true }},
+                                ticks: {{ color: '#9ca3af', font: {{ size: 10 }} }}
+                            }},
+                            y: {{
+                                grid: {{ color: '#1f2937' }},
+                                ticks: {{ color: '#9ca3af', font: {{ size: 10 }}, stepSize: 1 }}
+                            }}
+                        }}
+                    }}
+                }});
+
                 function openModal() {{ document.getElementById('modalGroupName').value = 'Общие'; document.getElementById('addModal').classList.remove('hidden'); document.getElementById('addModal').classList.add('flex'); }}
                 function openAddModalToGroup(groupName) {{ document.getElementById('modalGroupName').value = groupName; document.getElementById('addModal').classList.remove('hidden'); document.getElementById('addModal').classList.add('flex'); }}
                 function closeModal() {{ document.getElementById('addModal').classList.add('hidden'); document.getElementById('addModal').classList.remove('flex'); }}
@@ -363,16 +342,6 @@ async def bot_detail(bot_id: int):
     
     cursor.execute("SELECT lead_id, status_text, timer_sec, updated_at FROM bot_logs WHERE bot_id = ?", (bot_id,))
     logs = cursor.fetchall()
-
-    # Статистика по дням за последние 5 дней для графика
-    chart_data = []
-    for i in range(4, -1, -1):
-        d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-        d_label = (datetime.now() - timedelta(days=i)).strftime("%d.%m")
-        cursor.execute("SELECT COUNT(*) FROM bot_logs WHERE bot_id = ? AND date(updated_at) = ?", (bot_id, d))
-        cnt = cursor.fetchone()[0] or 0
-        chart_data.append((d_label, cnt))
-
     conn.close()
 
     if not bot:
@@ -394,19 +363,6 @@ async def bot_detail(bot_id: int):
     if not logs:
         logs_html = "<p class='text-center text-gray-500 text-xs py-4'>Активных переписок в логах пока нет</p>"
 
-    # Генерация точек и цифр для графика по дням
-    chart_html = ""
-    max_val = max([val for _, val in chart_data]) or 1
-    for label, val in chart_data:
-        height_pct = int((val / max_val) * 60) + 15 # высота столбца/точки
-        chart_html += f"""
-        <div class="flex flex-col items-center flex-1">
-            <span class="text-[10px] text-blue-400 font-bold mb-1">{val}</span>
-            <div class="w-2 bg-blue-500 rounded-full shadow-lg shadow-blue-500/50" style="height: {height_pct}px;"></div>
-            <span class="text-[10px] text-gray-500 mt-2">{label}</span>
-        </div>
-        """
-
     html_content = f"""
     <!DOCTYPE html>
     <html lang="ru">
@@ -424,14 +380,6 @@ async def bot_detail(bot_id: int):
                 <span class="text-xs text-gray-500">{group_name}</span>
             </div>
 
-            <!-- График статистики по дням -->
-            <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg mb-4">
-                <h3 class="text-xs font-semibold text-gray-300 mb-3">📈 Активность по дням (сообщения)</h3>
-                <div class="flex items-end justify-between h-24 pt-2 px-2 border-b border-gray-800 pb-2">
-                    {chart_html}
-                </div>
-            </div>
-
             <div class="flex bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
                 <button onclick="switchTab('logs')" id="btn-logs" class="w-1/2 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white transition">📊 Трафик и логи</button>
                 <button onclick="trySwitchToCode()" id="btn-code" class="w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition">💻 Редактор кода</button>
@@ -445,7 +393,7 @@ async def bot_detail(bot_id: int):
                 </div>
             </div>
 
-            <!-- Вкладка Код (полный рабочий код) -->
+            <!-- Вкладка Код -->
             <div id="tab-code" class="hidden">
                 <form action="/save-code/{bot_id}" method="POST" onsubmit="return confirmSave();" class="space-y-3">
                     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
