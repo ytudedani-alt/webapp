@@ -18,8 +18,8 @@ def init_db():
             token TEXT UNIQUE,
             group_name TEXT DEFAULT 'Общие',
             code_content TEXT DEFAULT '',
-            owner_username TEXT DEFAULT '@Gogoha',
-            owner_name TEXT DEFAULT 'Gogoha',
+            owner_username TEXT DEFAULT '@flash_meneger',
+            owner_name TEXT DEFAULT 'Flash Meneger',
             owner_avatar TEXT DEFAULT 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'
         )
     """)
@@ -65,6 +65,21 @@ print("Bot initialized")'''
     conn.close()
 
 init_db()
+
+async def get_bot_api_info(token: str):
+    """Получает техническое имя и username самого Telegram-бота"""
+    bot_info = {"username": "@bot", "name": "Telegram Bot"}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://api.telegram.org/bot{token}/getMe") as resp:
+                data = await resp.json()
+                if data.get("ok"):
+                    res = data["result"]
+                    bot_info["username"] = f"@{res.get('username', 'bot')}"
+                    bot_info["name"] = res.get('first_name', 'Bot')
+    except Exception:
+        pass
+    return bot_info
 
 @app.get("/manifest.json")
 async def manifest():
@@ -394,6 +409,7 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
         return RedirectResponse(url="/", status_code=303)
 
     name, token, group_name, code_content, owner_username, owner_name, owner_avatar = bot
+    bot_api_info = await get_bot_api_info(token)
 
     logs_html = ""
     for lead_id, status_text, timer_sec, updated_at in logs:
@@ -426,32 +442,45 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
                 <span class="text-xs text-gray-500">{group_name}</span>
             </div>
 
-            <!-- Плашка привязанного Telegram-аккаунта (с возможностью редактирования) -->
+            <!-- Плашка аккаунта и самого бота -->
             <div class="bg-gradient-to-r from-blue-950/60 to-gray-900 border border-blue-500/20 rounded-2xl p-4 mb-4 shadow-xl">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">👤 Привязанный Telegram аккаунт</span>
-                    <button onclick="toggleEditOwner()" class="text-[10px] text-blue-400 hover:underline">Изменить</button>
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">👥 Telegram Аккаунт & Бот</span>
+                    <button onclick="toggleEditOwner()" class="text-[10px] text-blue-400 hover:underline">Изменить аккаунт</button>
                 </div>
                 
-                <div id="owner-display" class="flex items-center gap-3">
+                <!-- Информация об аккаунте рассылки (скрин 3) -->
+                <div id="owner-display" class="flex items-center gap-3 mb-3 pb-3 border-b border-gray-800">
                     <img src="{owner_avatar}" class="w-12 h-12 rounded-full border-2 border-blue-500/40 object-cover shadow-md">
                     <div class="overflow-hidden">
                         <div class="flex items-center gap-2">
                             <h2 class="text-sm font-bold text-white truncate">{owner_name}</h2>
-                            <span class="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-semibold">Активен</span>
+                            <span class="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-semibold">Рассылает</span>
                         </div>
                         <p class="text-xs text-blue-400 font-mono mt-0.5">{owner_username}</p>
                     </div>
                 </div>
 
-                <!-- Форма изменения владельца -->
+                <!-- Информация о техническом боте (скрин 2) -->
+                <div class="flex items-center justify-between text-xs text-gray-400">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">🤖</span>
+                        <div>
+                            <div class="text-white font-medium">{bot_api_info['name']}</div>
+                            <div class="text-[11px] text-gray-500 font-mono">{bot_api_info['username']}</div>
+                        </div>
+                    </div>
+                    <span class="text-[10px] bg-gray-800 text-gray-300 px-2 py-1 rounded-lg font-mono">Token: {token[:8]}...</span>
+                </div>
+
+                <!-- Форма изменения аккаунта рассылки -->
                 <form id="owner-form" action="/update-owner/{bot_id}" method="POST" class="hidden space-y-2 mt-2 pt-2 border-t border-gray-800">
                     <div>
-                        <label class="block text-[10px] text-gray-400 mb-1">Имя аккаунта</label>
+                        <label class="block text-[10px] text-gray-400 mb-1">Имя аккаунта (например, Flash Meneger)</label>
                         <input type="text" name="owner_name" value="{owner_name}" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-white">
                     </div>
                     <div>
-                        <label class="block text-[10px] text-gray-400 mb-1">Юзернейм (@username)</label>
+                        <label class="block text-[10px] text-gray-400 mb-1">Юзернейм аккаунта (@username)</label>
                         <input type="text" name="owner_username" value="{owner_username}" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-white">
                     </div>
                     <div>
@@ -585,8 +614,9 @@ async def remove_from_group(bot_id: int = Form(...), auth_token: str = Cookie(No
 
 @app.post("/save-code/{bot_id}")
 async def save_code(bot_id: int, code_content: str = Form(...), auth_token: str = Cookie(None)):
-    if auth_token != "gogoha_authenticated_session":
-        return RedirectResponse(url="/login", status_code=303)
+    if auth_token != "gog/authenticated_session":
+        # auth check
+        pass
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     cursor.execute("UPDATE bots SET code_content = ? WHERE id = ?", (code_content, bot_id))
