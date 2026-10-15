@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, Form, Cookie, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from pydantic import BaseModel
 import sqlite3
 import os
 import aiohttp
@@ -36,7 +37,6 @@ def init_db():
         )
     """)
 
-    # Полноценный код бота с автозаписью статистики в БД
     full_code_alex = '''import asyncio
 import os
 import random
@@ -208,6 +208,31 @@ if __name__ == "__main__":
     conn.close()
 
 init_db()
+
+# --- ПРИЕМНИК ЛОГОВ ОТ ВНЕШНИХ БОТОВ ---
+class LogSchema(BaseModel):
+    token: str
+    lead_id: str
+    status_text: str
+    timer_sec: int
+    is_final_link: int = 0
+
+@app.post("/api/log")
+async def receive_bot_log(log: LogSchema):
+    conn = sqlite3.connect("dashboard_bots.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM bots WHERE token = ?", (log.token,))
+    row = cursor.fetchone()
+    if row:
+        bot_id = row[0]
+        cursor.execute("""
+            INSERT INTO bot_logs (bot_id, lead_id, status_text, timer_sec, is_final_link)
+            VALUES (?, ?, ?, ?, ?)
+        """, (bot_id, log.lead_id, log.status_text, log.timer_sec, log.is_final_link))
+        conn.commit()
+    conn.close()
+    return {"status": "ok"}
+# --------------------------------------
 
 async def get_bot_api_info(token: str):
     bot_info = {"username": "@bot", "name": "Telegram Bot"}
@@ -747,6 +772,7 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 <span class="text-emerald-400">⏱ {timer_sec} сек</span>
             </div>
             <p class="text-gray-200">{status_text}</p>
+            <div class="text-[10px] text-gray-500 mt-1">{updated_at}</div>
         </div>
         """
     if not logs:
