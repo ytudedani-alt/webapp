@@ -9,18 +9,16 @@ def init_db():
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     
-    # Таблица ботов
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS bots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT,
             token TEXT UNIQUE,
             group_name TEXT DEFAULT 'Общие',
-            code_content TEXT DEFAULT '# Здесь можно писать логику бота\nprint("Bot started")'
+            code_content TEXT DEFAULT ''
         )
     """)
     
-    # Таблица для логов и трекинга лидов (трафика)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS bot_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,17 +30,42 @@ def init_db():
         )
     """)
 
+    # Реальные шаблоны кода для твоих ботов
+    default_code_alex = '''import asyncio
+import os
+import random
+from aiogram import Bot, Dispatcher
+from aiogram.types import Message, BusinessConnection, LinkPreviewOptions
+from aiohttp import web
+import aiohttp
+
+BOT_TOKEN = "YOUR_TOKEN"
+# Логика воронки Alex Bot
+print("Alex Bot initialized")'''
+
+    default_code_spanh = '''import asyncio
+import os
+import random
+from aiogram import Bot, Dispatcher
+from aiogram.types import Message, BusinessConnection, LinkPreviewOptions
+from aiohttp import web
+import aiohttp
+
+BOT_TOKEN = "YOUR_TOKEN"
+# Логика воронки Spanh/Flash
+print("Spanh/Flash Bot initialized")'''
+
     default_bots = [
-        ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group"),
-        ("Alex Bot 2", "8989087015:AAHAkK_e-fcIQFLkrfQgs4-ZhrKXcJft1G4", "Alex Group"),
-        ("Spanh Bot 1", "8902861284:AAEUL5DImSMqKSYKWdJ_uqlbYdKgBfF9Bq4", "Spanh Group"),
-        ("Spanh Bot 2", "8833046723:AAG_el4XirqdoMZLVcZdNWypVzanJkETGnY", "Spanh Group"),
-        ("Flash Manager Bot", "8586984485:AAE4m73JZGf3s5yfExriJP_C-otyiAWZu8I", "Flash")
+        ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", default_code_alex),
+        ("Alex Bot 2", "8989087015:AAHAkK_e-fcIQFLkrfQgs4-ZhrKXcJft1G4", "Alex Group", default_code_alex),
+        ("Spanh Bot 1", "8902861284:AAEUL5DImSMqKSYKWdJ_uqlbYdKgBfF9Bq4", "Spanh Group", default_code_spanh),
+        ("Spanh Bot 2", "8833046723:AAG_el4XirqdoMZLVcZdNWypVzanJkETGnY", "Spanh Group", default_code_spanh),
+        ("Flash Manager Bot", "8586984485:AAE4m73JZGf3s5yfExriJP_C-otyiAWZu8I", "Flash", default_code_spanh)
     ]
     
-    for name, token, group in default_bots:
+    for name, token, group, code in default_bots:
         try:
-            cursor.execute("INSERT OR IGNORE INTO bots (name, token, group_name) VALUES (?, ?, ?)", (name, token, group))
+            cursor.execute("INSERT OR IGNORE INTO bots (name, token, group_name, code_content) VALUES (?, ?, ?, ?)", (name, token, group, code))
         except Exception:
             pass
             
@@ -70,7 +93,6 @@ async def dashboard(request: Request):
     cursor.execute("SELECT id, name, token, group_name FROM bots")
     bots = cursor.fetchall()
     
-    # Группируем ботов по папкам
     groups = {}
     for bot_id, name, token, group in bots:
         if group not in groups:
@@ -93,11 +115,27 @@ async def dashboard(request: Request):
             </a>
             """
         
+        # Кнопка добавления в существующую папку (+) и удаления папки (🗑)
+        action_buttons = ""
+        if group_name != "Общие":
+            action_buttons = f"""
+            <div class="flex items-center gap-1">
+                <button onclick="openAddModalToGroup('{group_name}')" class="text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-lg font-bold" title="Добавить бота в папку">+</button>
+                <form action="/delete-group" method="POST" onsubmit="return confirm('Удалить папку {group_name}? Боты останутся в Общих.');" class="inline">
+                    <input type="hidden" name="group_name" value="{group_name}">
+                    <button type="submit" class="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-lg" title="Удалить папку">🗑</button>
+                </form>
+            </div>
+            """
+
         groups_html += f"""
         <div class="mb-6">
-            <div class="flex items-center gap-2 mb-3">
-                <span class="text-sm font-bold text-gray-300">📁 {group_name}</span>
-                <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">{len(g_bots)}</span>
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-bold text-gray-300">📁 {group_name}</span>
+                    <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">{len(g_bots)}</span>
+                </div>
+                {action_buttons}
             </div>
             {bots_cards}
         </div>
@@ -141,7 +179,7 @@ async def dashboard(request: Request):
                         </div>
                         <div>
                             <label class="block text-xs text-gray-400 mb-1">Группа / Папка</label>
-                            <input type="text" name="group_name" value="Общие" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500">
+                            <input type="text" id="modalGroupName" name="group_name" value="Общие" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500">
                         </div>
                         <div>
                             <label class="block text-xs text-gray-400 mb-1">Token</label>
@@ -173,7 +211,8 @@ async def dashboard(request: Request):
             </div>
 
             <script>
-                function openModal() {{ document.getElementById('addModal').classList.remove('hidden'); document.getElementById('addModal').classList.add('flex'); }}
+                function openModal() {{ document.getElementById('modalGroupName').value = 'Общие'; document.getElementById('addModal').classList.remove('hidden'); document.getElementById('addModal').classList.add('flex'); }}
+                function openAddModalToGroup(groupName) {{ document.getElementById('modalGroupName').value = groupName; document.getElementById('addModal').classList.remove('hidden'); document.getElementById('addModal').classList.add('flex'); }}
                 function closeModal() {{ document.getElementById('addModal').classList.add('hidden'); document.getElementById('addModal').classList.remove('flex'); }}
                 function openGroupModal() {{ document.getElementById('groupModal').classList.remove('hidden'); document.getElementById('groupModal').classList.add('flex'); }}
                 function closeGroupModal() {{ document.getElementById('groupModal').classList.add('hidden'); document.getElementById('groupModal').classList.remove('flex'); }}
@@ -231,10 +270,9 @@ async def bot_detail(bot_id: int):
                 <span class="text-xs text-gray-500">{group_name}</span>
             </div>
 
-            <!-- Вкладки / Переключение -->
             <div class="flex bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
                 <button onclick="switchTab('logs')" id="btn-logs" class="w-1/2 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white transition">📊 Трафик и логи</button>
-                <button onclick="switchTab('code')" id="btn-code" class="w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition">💻 Редактор кода</button>
+                <button onclick="trySwitchToCode()" id="btn-code" class="w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition">💻 Редактор кода</button>
             </div>
 
             <!-- Вкладка Логи -->
@@ -247,27 +285,37 @@ async def bot_detail(bot_id: int):
 
             <!-- Вкладка Код -->
             <div id="tab-code" class="hidden">
-                <form action="/save-code/{bot_id}" method="POST" class="space-y-3">
+                <form action="/save-code/{bot_id}" method="POST" onsubmit="return confirmSave();" class="space-y-3">
                     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-lg">
                         <label class="block text-xs text-gray-400 mb-2">Исходный код бота (Python / Aiogram)</label>
-                        <textarea name="code_content" rows="12" class="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-mono text-green-400 focus:outline-none focus:border-blue-500">{code_content}</textarea>
+                        <textarea name="code_content" rows="14" class="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-mono text-green-400 focus:outline-none focus:border-blue-500">{code_content}</textarea>
                     </div>
                     <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-sm font-semibold shadow-lg shadow-blue-600/30">💾 Сохранить и применить код</button>
                 </form>
             </div>
 
             <script>
+                function trySwitchToCode() {{
+                    // Первое предупреждение при попытке войти в редактор
+                    if (confirm("Вы точно хотите редактировать код?")) {{
+                        document.getElementById('tab-code').classList.remove('hidden');
+                        document.getElementById('tab-logs').classList.add('hidden');
+                        document.getElementById('btn-code').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white transition';
+                        document.getElementById('btn-logs').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition';
+                    }}
+                }}
+
+                function confirmSave() {{
+                    // Второе предупреждение перед сохранением
+                    return confirm("Вы точно хотите сохранить изменения в коде?");
+                }}
+
                 function switchTab(tab) {{
                     if (tab === 'logs') {{
                         document.getElementById('tab-logs').classList.remove('hidden');
                         document.getElementById('tab-code').classList.add('hidden');
                         document.getElementById('btn-logs').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white transition';
                         document.getElementById('btn-code').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition';
-                    }} else {{
-                        document.getElementById('tab-code').classList.remove('hidden');
-                        document.getElementById('tab-logs').classList.add('hidden');
-                        document.getElementById('btn-code').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white transition';
-                        document.getElementById('btn-logs').className = 'w-1/2 py-2 rounded-xl text-xs font-semibold text-gray-400 transition';
                     }}
                 }}
             </script>
@@ -282,7 +330,8 @@ async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO bots (name, token, group_name) VALUES (?, ?, ?)", (name, token.strip(), group_name.strip()))
+        cursor.execute("INSERT INTO bots (name, token, group_name, code_content) VALUES (?, ?, ?, ?)", 
+                       (name, token.strip(), group_name.strip(), '# Новый бот\nprint("Started")'))
         conn.commit()
     except Exception:
         pass
@@ -291,7 +340,16 @@ async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str
 
 @app.post("/add-group")
 async def add_group(group_name: str = Form(...)):
-    # Просто редирект, группы создаются при добавлении бота в новую группу
+    return RedirectResponse(url="/", status_code=303)
+
+@app.post("/delete-group")
+async def delete_group(group_name: str = Form(...)):
+    conn = sqlite3.connect("dashboard_bots.db")
+    cursor = conn.cursor()
+    # Переносим ботов удаляемой группы в группу "Общие"
+    cursor.execute("UPDATE bots SET group_name = 'Общие' WHERE group_name = ?", (group_name,))
+    conn.commit()
+    conn.close()
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/save-code/{bot_id}")
@@ -300,7 +358,6 @@ async def save_code(bot_id: int, code_content: str = Form(...)):
     cursor = conn.cursor()
     cursor.execute("UPDATE bots SET code_content = ? WHERE id = ?", (code_content, bot_id))
     
-    # Записываем в логи факт изменения кода
     cursor.execute("INSERT INTO bot_logs (bot_id, lead_id, status_text, timer_sec) VALUES (?, ?, ?, ?)", 
                    (bot_id, "SYSTEM", "Код успешно обновлен через Web IDE. Бот переведен в рабочий режим.", 0))
     conn.commit()
