@@ -83,22 +83,11 @@ async def get_bot_api_info(token: str):
         pass
     return bot_info
 
-@app.get("/manifest.json")
-async def manifest():
-    return JSONResponse({
-        "name": "Alex Bots Control",
-        "short_name": "Bots",
-        "start_url": "/",
-        "display": "standalone",
-        "background_color": "#030712",
-        "theme_color": "#030712",
-        "icons": [{"src": "https://cdn-icons-png.flaticon.com/512/6134/6134346.png", "sizes": "512x512", "type": "image/png"}]
-    })
-
 @app.get("/login", response_class=HTMLResponse)
-async def login_page(error: str = None):
+async def login_page(response: Response, error: str = None):
     err_html = f'<div class="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-xl text-xs text-center mb-4">{error}</div>' if error else ''
-    return f"""
+    
+    html = f"""
     <!DOCTYPE html>
     <html lang="ru">
     <head>
@@ -247,18 +236,31 @@ async def login_page(error: str = None):
     </body>
     </html>
     """
+    res = HTMLResponse(content=html)
+    # Сбрасываем старые куки при каждом переходе на логин
+    res.delete_cookie("auth_token")
+    res.delete_cookie("gogoha_strict_session")
+    return res
 
 @app.post("/login")
 async def login_post(username: str = Form(...), password: str = Form(...)):
     if username == "Gogoha" and password == "05056978":
         response = RedirectResponse(url="/", status_code=303)
-        response.set_cookie(key="auth_token", value="gogoha_authenticated_session", httponly=True)
+        # Сохраняем сессию на 15 минут
+        response.set_cookie(key="gogoha_strict_session", value="active_valid_session", max_age=900, httponly=True)
         return response
     return RedirectResponse(url="/login?error=Неверный логин или пароль", status_code=303)
 
+@app.get("/logout")
+async def logout():
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie("gogoha_strict_session")
+    response.delete_cookie("auth_token")
+    return response
+
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, auth_token: str = Cookie(None)):
-    if auth_token != "gogoha_authenticated_session":
+async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None)):
+    if gogoha_strict_session != "active_valid_session":
         return RedirectResponse(url="/login", status_code=303)
 
     conn = sqlite3.connect("dashboard_bots.db")
@@ -359,7 +361,8 @@ async def dashboard(request: Request, auth_token: str = Cookie(None)):
                     <h1 class="text-xl font-bold text-white">📱 Мои Боты</h1>
                     <p class="text-xs text-gray-400">Центр управления трафиком</p>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex gap-2 items-center">
+                    <a href="/logout" class="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-semibold border border-red-500/20">🚪 Выйти</a>
                     <button onclick="openGroupModal()" class="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-semibold border border-gray-700">+ Группа</button>
                     <button onclick="openModal()" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl text-xs shadow-lg shadow-emerald-500/20">+ Бот</button>
                 </div>
@@ -489,8 +492,8 @@ async def dashboard(request: Request, auth_token: str = Cookie(None)):
     return HTMLResponse(content=html_content)
 
 @app.get("/bot/{bot_id}", response_class=HTMLResponse)
-async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
-    if auth_token != "gogoha_authenticated_session":
+async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
+    if gogoha_strict_session != "active_valid_session":
         return RedirectResponse(url="/login", status_code=303)
 
     conn = sqlite3.connect("dashboard_bots.db")
@@ -651,8 +654,8 @@ async def bot_detail(bot_id: int, auth_token: str = Cookie(None)):
     return HTMLResponse(content=html_content)
 
 @app.post("/update-owner/{bot_id}")
-async def update_owner(bot_id: int, owner_name: str = Form(...), owner_username: str = Form(...), owner_avatar: str = Form(...), auth_token: str = Cookie(None)):
-    if auth_token != "gogoha_authenticated_session":
+async def update_owner(bot_id: int, owner_name: str = Form(...), owner_username: str = Form(...), owner_avatar: str = Form(...), gogoha_strict_session: str = Cookie(None)):
+    if gogoha_strict_session != "active_valid_session":
         return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
@@ -663,8 +666,8 @@ async def update_owner(bot_id: int, owner_name: str = Form(...), owner_username:
     return RedirectResponse(url=f"/bot/{bot_id}", status_code=303)
 
 @app.post("/add-bot")
-async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str = Form(...), auth_token: str = Cookie(None)):
-    if auth_token != "gogoha_authenticated_session":
+async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str = Form(...), gogoha_strict_session: str = Cookie(None)):
+    if gogoha_strict_session != "active_valid_session":
         return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
@@ -678,14 +681,14 @@ async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/add-group")
-async def add_group(group_name: str = Form(...), auth_token: str = Cookie(None)):
-    if auth_token != "gogoha_authenticated_session":
+async def add_group(group_name: str = Form(...), gogoha_strict_session: str = Cookie(None)):
+    if gogoha_strict_session != "active_valid_session":
         return RedirectResponse(url="/login", status_code=303)
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/delete-group")
-async def delete_group(group_name: str = Form(...), auth_token: str = Cookie(None)):
-    if auth_token != "gogoha_authenticated_session":
+async def delete_group(group_name: str = Form(...), gogoha_strict_session: str = Cookie(None)):
+    if gogoha_strict_session != "active_valid_session":
         return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
@@ -695,8 +698,8 @@ async def delete_group(group_name: str = Form(...), auth_token: str = Cookie(Non
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/remove-from-group")
-async def remove_from_group(bot_id: int = Form(...), auth_token: str = Cookie(None)):
-    if auth_token != "gogoha_authenticated_session":
+async def remove_from_group(bot_id: int = Form(...), gogoha_strict_session: str = Cookie(None)):
+    if gogoha_strict_session != "active_valid_session":
         return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
@@ -706,8 +709,8 @@ async def remove_from_group(bot_id: int = Form(...), auth_token: str = Cookie(No
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/save-code/{bot_id}")
-async def save_code(bot_id: int, code_content: str = Form(...), auth_token: str = Cookie(None)):
-    if auth_token != "gogoha_authenticated_session":
+async def save_code(bot_id: int, code_content: str = Form(...), gogoha_strict_session: str = Cookie(None)):
+    if gogoha_strict_session != "active_valid_session":
         return RedirectResponse(url="/login", status_code=303)
     conn = sqlite3.connect("dashboard_bots.db")
     cursor = conn.cursor()
