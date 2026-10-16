@@ -51,12 +51,31 @@ def init_db():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # Восстановление стандартного списка ботов
+    full_code_alex = '''# Код бота'''
+    default_bots = [
+        ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", full_code_alex, "@alex_acc_1", "Alex Manager 1"),
+        ("Alex Bot 2", "8989087015:AAHAkK_e-fcIQFLkrfQgs4-ZhrKXcJft1G4", "Alex Group", full_code_alex, "@alex_acc_2", "Alex Manager 2"),
+        ("Spanh Bot 1", "8902861284:AAEUL5DImSMqKSYKWdJ_uqlbYdKgBfF9Bq4", "Spanh Group", full_code_alex, "@spanh_acc_1", "Spanh Manager 1"),
+        ("Spanh Bot 2", "8833046723:AAG_el4XirqdoMZLVcZdNWypVzanJkETGnY", "Spanh Group", full_code_alex, "@spanh_acc_2", "Spanh Manager 2"),
+        ("Flash Manager Bot", "8586984485:AAE4m73JZGf3s5yfExriJP_C-otyiAWZu8I", "Общие", full_code_alex, "@flash_meneger", "Flash Manager")
+    ]
+    
+    for name, token, group, code, o_user, o_name in default_bots:
+        try:
+            cursor.execute("""
+                INSERT OR IGNORE INTO bots (name, token, group_name, code_content, owner_username, owner_name) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (name, token, group, code, o_user, o_name))
+        except Exception:
+            pass
+
     conn.commit()
     conn.close()
 
 init_db()
 
-# --- АВТОПИНГ ДЛЯ ПРЕДОТВРАЩЕНИЯ ЗАСЫПАНИЯ САЙТА ---
 async def self_ping_webapp():
     render_url = os.environ.get("RENDER_EXTERNAL_URL", "https://webapp-abar.onrender.com")
     await asyncio.sleep(20)
@@ -64,15 +83,14 @@ async def self_ping_webapp():
         while True:
             try:
                 async with session.get(render_url) as response:
-                    print(f"[WEB PING] Самопинг панели отправлен, статус: {response.status}")
+                    print(f"[WEB PING] Статус: {response.status}")
             except Exception as e:
-                print(f"[WEB PING] Ошибка самопинга панели: {e}")
+                print(f"[WEB PING] Ошибка: {e}")
             await asyncio.sleep(300)
 
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(self_ping_webapp())
-# ----------------------------------------------------
 
 class LogSchema(BaseModel):
     token: str
@@ -246,7 +264,11 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                     <h1 class="text-xl font-bold text-white">📱 Мои Боты</h1>
                     <p class="text-xs text-gray-400">Центр управления трафиком</p>
                 </div>
-                <a href="/logout" class="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-xl text-xs font-semibold border border-red-500/20">🚪 Выйти</a>
+                <div class="flex gap-2 items-center">
+                    <a href="/logout" class="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-semibold border border-red-500/20">🚪 Выйти</a>
+                    <button onclick="openGroupModal()" class="px-2.5 py-1.5 bg-gray-900 hover:bg-gray-800 text-gray-200 rounded-xl text-xs font-semibold border border-gray-800">+ Группа</button>
+                    <button onclick="openModal()" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl text-xs shadow-lg">+ Бот</button>
+                </div>
             </header>
 
             <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
@@ -271,6 +293,46 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
             </div>
 
             {groups_html}
+
+            <div id="addModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+                <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+                    <h3 class="text-lg font-bold text-white mb-4">➕ Добавить бота</h3>
+                    <form action="/add-bot" method="POST" class="space-y-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Название</label>
+                            <input type="text" name="name" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Группа / Папка</label>
+                            <input type="text" id="modalGroupName" name="group_name" value="Общие" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Token</label>
+                            <input type="text" name="token" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white" placeholder="123456:ABC...">
+                        </div>
+                        <div class="flex gap-3 pt-2">
+                            <button type="button" onclick="closeModal()" class="w-1/2 bg-gray-800 text-gray-300 py-3 rounded-xl text-sm font-medium">Отмена</button>
+                            <button type="submit" class="w-1/2 bg-emerald-500 text-gray-950 font-bold py-3 rounded-xl text-sm">Сохранить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div id="groupModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+                <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+                    <h3 class="text-lg font-bold text-white mb-4">📁 Новая группа</h3>
+                    <form action="/add-group" method="POST" class="space-y-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Название группы</label>
+                            <input type="text" name="group_name" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white">
+                        </div>
+                        <div class="flex gap-3 pt-2">
+                            <button type="button" onclick="closeGroupModal()" class="w-1/2 bg-gray-800 text-gray-300 py-3 rounded-xl text-sm font-medium">Отмена</button>
+                            <button type="submit" class="w-1/2 bg-emerald-500 text-gray-950 font-bold py-3 rounded-xl text-sm">Создать</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
             
             <script>
                 const chartCtx = document.getElementById('trafficChart').getContext('2d');
@@ -285,6 +347,11 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                     }},
                     options: {{ responsive: true, maintainAspectRatio: false }}
                 }});
+
+                function openModal() {{ document.getElementById('addModal').classList.remove('hidden'); document.getElementById('addModal').classList.add('flex'); }}
+                function closeModal() {{ document.getElementById('addModal').classList.add('hidden'); document.getElementById('addModal').classList.remove('flex'); }}
+                function openGroupModal() {{ document.getElementById('groupModal').classList.remove('hidden'); document.getElementById('groupModal').classList.add('flex'); }}
+                function closeGroupModal() {{ document.getElementById('groupModal').classList.add('hidden'); document.getElementById('groupModal').classList.remove('flex'); }}
             </script>
         </div>
     </body>
@@ -468,6 +535,27 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
     </html>
     """
     return HTMLResponse(content=html_content)
+
+@app.post("/add-bot")
+async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str = Form(...), gogoha_strict_session: str = Cookie(None)):
+    if gogoha_strict_session != "active_valid_session":
+        return RedirectResponse(url="/login", status_code=303)
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO bots (name, token, group_name, code_content, owner_username, owner_name) VALUES (?, ?, ?, ?, ?, ?)", 
+                       (name, token.strip(), group_name.strip(), "", '@new_acc', 'New Manager'))
+        conn.commit()
+    except Exception:
+        pass
+    conn.close()
+    return RedirectResponse(url="/", status_code=303)
+
+@app.post("/add-group")
+async def add_group(group_name: str = Form(...), gogoha_strict_session: str = Cookie(None)):
+    if gogoha_strict_session != "active_valid_session":
+        return RedirectResponse(url="/login", status_code=303)
+    return RedirectResponse(url="/", status_code=303)
 
 @app.post("/update-owner/{bot_id}")
 async def update_owner(bot_id: int, owner_name: str = Form(...), owner_username: str = Form(...), avatar_file: UploadFile = File(None), gogoha_strict_session: str = Cookie(None)):
