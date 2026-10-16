@@ -9,7 +9,6 @@ import asyncio
 from datetime import datetime, timedelta
 import shutil
 
-# Проверка подключения к PostgreSQL
 DATABASE_URL = os.environ.get("DATABASE_URL")
 IS_POSTGRES = False
 
@@ -28,14 +27,12 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 def get_db():
     if IS_POSTGRES:
-        # Для PostgreSQL
         url = DATABASE_URL
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
         conn = psycopg2.connect(url, cursor_factory=psycopg2.extras.DictCursor)
         return conn
     else:
-        # Для локальной SQLite
         conn = sqlite3.connect("dashboard_bots.db")
         conn.row_factory = sqlite3.Row
         return conn
@@ -228,6 +225,20 @@ async def self_ping_webapp():
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(self_ping_webapp())
+
+async def get_bot_api_info(token: str):
+    bot_info = {"username": "@bot", "name": "Telegram Bot"}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://api.telegram.org/bot{token}/getMe") as resp:
+                data = await resp.json()
+                if data.get("ok"):
+                    res = data["result"]
+                    bot_info["username"] = f"@{res.get('username', 'bot')}"
+                    bot_info["name"] = res.get('first_name', 'Bot')
+    except Exception:
+        pass
+    return bot_info
 
 class LogSchema(BaseModel):
     token: str
@@ -538,6 +549,8 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
         conn.close()
         return RedirectResponse(url="/", status_code=303)
 
+    bot_api_info = await get_bot_api_info(bot['token'])
+
     cursor.execute(f"SELECT * FROM bot_logs WHERE bot_id = {q_param} ORDER BY updated_at DESC", (bot_id,))
     logs = cursor.fetchall()
 
@@ -650,23 +663,40 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 <span class="text-xs text-gray-500">{bot['group_name']}</span>
             </div>
 
+            <!-- ШАПКА: ЛИЧНЫЙ АККАУНТ + ПОДКЛЮЧЕННЫЙ TELEGRAM БОТ -->
             <div class="bg-gradient-to-r from-emerald-950/40 to-gray-900 border border-emerald-500/20 rounded-2xl p-4 mb-4 shadow-xl">
                 <div class="flex items-center justify-between mb-3">
-                    <span class="text-[10px] text-gray-400 uppercase font-semibold">👥 Telegram Аккаунт & Бот</span>
+                    <span class="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">👥 Telegram Аккаунт & Бот</span>
                     <button onclick="toggleEditOwner()" class="text-[10px] text-emerald-400 hover:underline">Изменить фото</button>
                 </div>
                 
+                <!-- 1. Личный Telegram Аккаунт -->
                 <div id="owner-display" class="flex items-center gap-3 mb-3 pb-3 border-b border-gray-800">
-                    <img src="{bot['owner_avatar']}" class="w-12 h-12 rounded-full border-2 border-emerald-500/40 object-cover">
+                    <img src="{bot['owner_avatar']}" class="w-12 h-12 rounded-full border-2 border-emerald-500/40 object-cover shadow-md">
                     <div>
-                        <h2 class="text-sm font-bold text-white">{bot['owner_name']}</h2>
-                        <p class="text-xs text-emerald-400 font-mono">{bot['owner_username']}</p>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-sm font-bold text-white">{bot['owner_name']}</h2>
+                            <span class="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20">Владелец</span>
+                        </div>
+                        <p class="text-xs text-emerald-400 font-mono mt-0.5">{bot['owner_username']}</p>
                     </div>
                 </div>
 
-                <form id="owner-form" action="/update-owner/{bot_id}" method="POST" enctype="multipart/form-data" class="hidden space-y-3 mb-3">
-                    <input type="text" name="owner_name" value="{bot['owner_name']}" placeholder="Имя" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs">
-                    <input type="text" name="owner_username" value="{bot['owner_username']}" placeholder="@username" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs">
+                <!-- 2. Подключенный Бот -->
+                <div class="flex items-center justify-between text-xs bg-gray-950/80 p-2.5 rounded-xl border border-gray-800/80">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-lg">🤖</span>
+                        <div>
+                            <div class="text-white font-bold text-xs">{bot_api_info['name']}</div>
+                            <div class="text-[11px] text-emerald-400 font-mono">{bot_api_info['username']}</div>
+                        </div>
+                    </div>
+                    <span class="text-[10px] text-gray-400 font-mono bg-gray-900 px-2 py-1 rounded-lg border border-gray-800">Token: {bot['token'][:8]}...</span>
+                </div>
+
+                <form id="owner-form" action="/update-owner/{bot_id}" method="POST" enctype="multipart/form-data" class="hidden space-y-3 mt-3 pt-3 border-t border-gray-800">
+                    <input type="text" name="owner_name" value="{bot['owner_name']}" placeholder="Имя аккаунта" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-white">
+                    <input type="text" name="owner_username" value="{bot['owner_username']}" placeholder="@username аккаунта" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-white">
                     <input type="file" name="avatar_file" accept="image/*" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-gray-300">
                     <div class="flex gap-2">
                         <button type="submit" class="bg-emerald-500 text-gray-950 font-bold px-3 py-1.5 rounded-lg text-xs">Сохранить</button>
@@ -675,6 +705,7 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 </form>
             </div>
 
+            <!-- ТАБЫ -->
             <div class="grid grid-cols-4 gap-1 bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
                 <button onclick="switchTab('users')" id="btn-users" class="py-2 px-1 rounded-xl text-[10px] font-semibold bg-emerald-500 text-gray-950 font-bold transition text-center">👤 Юзеры</button>
                 <button onclick="switchTab('logs')" id="btn-logs" class="py-2 px-1 rounded-xl text-[10px] font-semibold text-gray-400 transition text-center">📊 Логи</button>
@@ -686,32 +717,62 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
             <div id="tab-logs" class="hidden space-y-2">{logs_html}</div>
             <div id="tab-stats" class="hidden space-y-2">{daily_stats_html}</div>
 
+            <!-- РЕДАКТОР КОДА C ПОДТВЕРЖДЕНИЕМ И СБРОСОМ -->
             <div id="tab-code" class="hidden space-y-3">
-                <form action="/save-code/{bot_id}" method="POST" class="space-y-3">
+                <form id="code-form" action="/save-code/{bot_id}" method="POST" onsubmit="return confirmSaveCode()" class="space-y-3">
                     <div class="flex justify-between items-center mb-1">
                         <span class="text-xs text-gray-400"># Полный код бота</span>
-                        <button type="button" onclick="enableCodeEdit()" id="btn-edit-code" class="text-xs text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded-lg bg-emerald-500/10">✏️ Изменить код</button>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="cancelCodeEdit()" id="btn-cancel-code" class="hidden text-xs text-red-400 border border-red-500/30 px-2 py-1 rounded-lg bg-red-500/10">❌ Отмена</button>
+                            <button type="button" onclick="enableCodeEdit()" id="btn-edit-code" class="text-xs text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded-lg bg-emerald-500/10">✏️ Изменить код</button>
+                        </div>
                     </div>
                     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-2 shadow-lg">
                         <textarea id="code-area" readonly name="code_content" class="code-editor w-full h-[420px] bg-gray-950 border border-gray-800/80 rounded-xl p-3 text-xs font-mono text-emerald-400 focus:outline-none leading-relaxed resize-y whitespace-pre overflow-auto">{bot['code_content']}</textarea>
                     </div>
-                    <button type="submit" id="btn-save-code" class="w-full bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold py-3 rounded-xl text-sm shadow-lg shadow-emerald-500/20 transition">💾 Сохранить и обновить код</button>
+                    <button type="submit" id="btn-save-code" class="hidden w-full bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold py-3 rounded-xl text-sm shadow-lg shadow-emerald-500/20 transition">💾 Сохранить и обновить код</button>
                 </form>
             </div>
 
             <script>
+                // Сохраняем исходный код при загрузке для отмены
+                const originalCodeContent = `{bot['code_content']}`;
+
                 function enableCodeEdit() {{
-                    const area = document.getElementById('code-area');
-                    area.removeAttribute('readonly');
-                    area.focus();
-                    document.getElementById('btn-edit-code').innerText = '🔓 Режим редактирования';
-                    document.getElementById('btn-edit-code').className = 'text-xs text-green-400 font-bold';
+                    if (confirm("Вы уверены, что хотите перейти в режим редактирования кода?")) {{
+                        const area = document.getElementById('code-area');
+                        area.removeAttribute('readonly');
+                        area.focus();
+                        document.getElementById('btn-edit-code').classList.add('hidden');
+                        document.getElementById('btn-cancel-code').classList.remove('hidden');
+                        document.getElementById('btn-save-code').classList.remove('hidden');
+                    }}
                 }}
+
+                function cancelCodeEdit() {{
+                    const area = document.getElementById('code-area');
+                    area.value = originalCodeContent;
+                    area.setAttribute('readonly', 'true');
+                    document.getElementById('btn-edit-code').classList.remove('hidden');
+                    document.getElementById('btn-cancel-code').classList.add('hidden');
+                    document.getElementById('btn-save-code').classList.add('hidden');
+                }}
+
+                function confirmSaveCode() {{
+                    return confirm("Вы уверены, что хотите сохранить изменения и обновить код бота?");
+                }}
+
                 function toggleEditOwner() {{
                     document.getElementById('owner-display').classList.toggle('hidden');
                     document.getElementById('owner-form').classList.toggle('hidden');
                 }}
+
                 function switchTab(tab) {{
+                    // Если выходим из вкладки код — сбрасываем несохраненные изменения
+                    if (tab !== 'code') {{
+                        cancelCodeEdit();
+                    }}
+
                     ['users', 'logs', 'stats', 'code'].forEach(t => {{
                         document.getElementById('tab-' + t).classList.add('hidden');
                         document.getElementById('btn-' + t).className = 'py-2 px-1 rounded-xl text-[10px] font-semibold text-gray-400 transition text-center';
