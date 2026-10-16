@@ -152,35 +152,58 @@ def init_db():
     conn = get_db()
     cursor = conn.cursor()
     
-    pk_auto = "SERIAL PRIMARY KEY" if IS_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
-    ts_default = "CURRENT_TIMESTAMP" if IS_POSTGRES else "CURRENT_TIMESTAMP"
-    
-    cursor.execute(f"""
-        CREATE TABLE IF NOT EXISTS bots (
-            id {pk_auto},
-            name TEXT,
-            token TEXT UNIQUE,
-            group_name TEXT DEFAULT 'Общие',
-            code_content TEXT DEFAULT '',
-            owner_username TEXT DEFAULT '',
-            owner_name TEXT DEFAULT '',
-            owner_avatar TEXT DEFAULT 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'
-        )
-    """)
-    
-    cursor.execute(f"""
-        CREATE TABLE IF NOT EXISTS bot_logs (
-            id {pk_auto},
-            bot_id INTEGER,
-            lead_id TEXT,
-            lead_username TEXT DEFAULT '',
-            status_text TEXT,
-            timer_sec INTEGER,
-            is_final_link INTEGER DEFAULT 0,
-            status_code TEXT DEFAULT 'WAITING',
-            updated_at TIMESTAMP DEFAULT {ts_default}
-        )
-    """)
+    if IS_POSTGRES:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bots (
+                id SERIAL PRIMARY KEY,
+                name TEXT,
+                token TEXT UNIQUE,
+                group_name TEXT DEFAULT 'Общие',
+                code_content TEXT DEFAULT '',
+                owner_username TEXT DEFAULT '',
+                owner_name TEXT DEFAULT '',
+                owner_avatar TEXT DEFAULT 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_logs (
+                id SERIAL PRIMARY KEY,
+                bot_id INTEGER,
+                lead_id TEXT,
+                lead_username TEXT DEFAULT '',
+                status_text TEXT,
+                timer_sec INTEGER,
+                is_final_link INTEGER DEFAULT 0,
+                status_code TEXT DEFAULT 'WAITING',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+    else:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                token TEXT UNIQUE,
+                group_name TEXT DEFAULT 'Общие',
+                code_content TEXT DEFAULT '',
+                owner_username TEXT DEFAULT '',
+                owner_name TEXT DEFAULT '',
+                owner_avatar TEXT DEFAULT 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bot_id INTEGER,
+                lead_id TEXT,
+                lead_username TEXT DEFAULT '',
+                status_text TEXT,
+                timer_sec INTEGER,
+                is_final_link INTEGER DEFAULT 0,
+                status_code TEXT DEFAULT 'WAITING',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
     default_bots = [
         ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", CODE_ALEX_1, "@alex_acc_1", "Alex Manager 1"),
@@ -200,9 +223,8 @@ def init_db():
                 """, (name, token, group, code, o_user, o_name))
             else:
                 cursor.execute("""
-                    INSERT INTO bots (name, token, group_name, code_content, owner_username, owner_name) 
+                    INSERT OR IGNORE INTO bots (name, token, group_name, code_content, owner_username, owner_name) 
                     VALUES (?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(token) DO NOTHING
                 """, (name, token, group, code, o_user, o_name))
         except Exception:
             pass
@@ -253,7 +275,6 @@ class LogSchema(BaseModel):
 async def receive_bot_log(log: LogSchema):
     conn = get_db()
     cursor = conn.cursor()
-    
     q_param = "%s" if IS_POSTGRES else "?"
     
     cursor.execute(f"SELECT id FROM bots WHERE token = {q_param}", (log.token,))
@@ -670,7 +691,6 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                     <button onclick="toggleEditOwner()" class="text-[10px] text-emerald-400 hover:underline">Изменить фото</button>
                 </div>
                 
-                <!-- 1. Личный Telegram Аккаунт -->
                 <div id="owner-display" class="flex items-center gap-3 mb-3 pb-3 border-b border-gray-800">
                     <img src="{bot['owner_avatar']}" class="w-12 h-12 rounded-full border-2 border-emerald-500/40 object-cover shadow-md">
                     <div>
@@ -682,7 +702,6 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                     </div>
                 </div>
 
-                <!-- 2. Подключенный Бот -->
                 <div class="flex items-center justify-between text-xs bg-gray-950/80 p-2.5 rounded-xl border border-gray-800/80">
                     <div class="flex items-center gap-2.5">
                         <span class="text-lg">🤖</span>
@@ -705,7 +724,6 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 </form>
             </div>
 
-            <!-- ТАБЫ -->
             <div class="grid grid-cols-4 gap-1 bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
                 <button onclick="switchTab('users')" id="btn-users" class="py-2 px-1 rounded-xl text-[10px] font-semibold bg-emerald-500 text-gray-950 font-bold transition text-center">👤 Юзеры</button>
                 <button onclick="switchTab('logs')" id="btn-logs" class="py-2 px-1 rounded-xl text-[10px] font-semibold text-gray-400 transition text-center">📊 Логи</button>
@@ -717,7 +735,6 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
             <div id="tab-logs" class="hidden space-y-2">{logs_html}</div>
             <div id="tab-stats" class="hidden space-y-2">{daily_stats_html}</div>
 
-            <!-- РЕДАКТОР КОДА C ПОДТВЕРЖДЕНИЕМ И СБРОСОМ -->
             <div id="tab-code" class="hidden space-y-3">
                 <form id="code-form" action="/save-code/{bot_id}" method="POST" onsubmit="return confirmSaveCode()" class="space-y-3">
                     <div class="flex justify-between items-center mb-1">
@@ -735,7 +752,6 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
             </div>
 
             <script>
-                // Сохраняем исходный код при загрузке для отмены
                 const originalCodeContent = `{bot['code_content']}`;
 
                 function enableCodeEdit() {{
@@ -768,7 +784,6 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 }}
 
                 function switchTab(tab) {{
-                    // Если выходим из вкладки код — сбрасываем несохраненные изменения
                     if (tab !== 'code') {{
                         cancelCodeEdit();
                     }}
