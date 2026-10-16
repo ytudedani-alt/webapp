@@ -813,5 +813,7 @@ async def save_code(bot_id: int, code_content: str = Form(...), gogoha_strict_se
     conn.close()
     return RedirectResponse(url=f"/bot/{bot_id}", status_code=303)
 
+if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("dashboard:app", host="0.0.0.0", port=port)
