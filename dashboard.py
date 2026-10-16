@@ -9,19 +9,37 @@ import asyncio
 from datetime import datetime, timedelta
 import shutil
 
+# Проверка подключения к PostgreSQL
+DATABASE_URL = os.environ.get("DATABASE_URL")
+IS_POSTGRES = False
+
+if DATABASE_URL:
+    try:
+        import psycopg2
+        import psycopg2.extras
+        IS_POSTGRES = True
+    except ImportError:
+        IS_POSTGRES = False
+
 app = FastAPI(title="Alex Advanced Bot Control Center")
 
 os.makedirs("static/avatars", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-DB_NAME = "dashboard_bots.db"
-
 def get_db():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if IS_POSTGRES:
+        # Для PostgreSQL
+        url = DATABASE_URL
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        conn = psycopg2.connect(url, cursor_factory=psycopg2.extras.DictCursor)
+        return conn
+    else:
+        # Для локальной SQLite
+        conn = sqlite3.connect("dashboard_bots.db")
+        conn.row_factory = sqlite3.Row
+        return conn
 
-# --- УНИКАЛЬНЫЕ КОДЫ ДЛЯ КАЖДОГО БОТА ---
 CODE_ALEX_1 = '''import asyncio
 import os
 import random
@@ -133,14 +151,16 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())'''
 
-
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
     
-    cursor.execute("""
+    pk_auto = "SERIAL PRIMARY KEY" if IS_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    ts_default = "CURRENT_TIMESTAMP" if IS_POSTGRES else "CURRENT_TIMESTAMP"
+    
+    cursor.execute(f"""
         CREATE TABLE IF NOT EXISTS bots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {pk_auto},
             name TEXT,
             token TEXT UNIQUE,
             group_name TEXT DEFAULT 'Общие',
@@ -151,9 +171,9 @@ def init_db():
         )
     """)
     
-    cursor.execute("""
+    cursor.execute(f"""
         CREATE TABLE IF NOT EXISTS bot_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {pk_auto},
             bot_id INTEGER,
             lead_id TEXT,
             lead_username TEXT DEFAULT '',
@@ -161,7 +181,7 @@ def init_db():
             timer_sec INTEGER,
             is_final_link INTEGER DEFAULT 0,
             status_code TEXT DEFAULT 'WAITING',
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            updated_at TIMESTAMP DEFAULT {ts_default}
         )
     """)
 
@@ -175,11 +195,18 @@ def init_db():
     
     for name, token, group, code, o_user, o_name in default_bots:
         try:
-            cursor.execute("""
-                INSERT INTO bots (name, token, group_name, code_content, owner_username, owner_name) 
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(token) DO UPDATE SET code_content = CASE WHEN code_content = '' THEN ? ELSE code_content END
-            """, (name, token, group, code, o_user, o_name, code))
+            if IS_POSTGRES:
+                cursor.execute("""
+                    INSERT INTO bots (name, token, group_name, code_content, owner_username, owner_name) 
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT(token) DO NOTHING
+                """, (name, token, group, code, o_user, o_name))
+            else:
+                cursor.execute("""
+                    INSERT INTO bots (name, token, group_name, code_content, owner_username, owner_name) 
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(token) DO NOTHING
+                """, (name, token, group, code, o_user, o_name))
         except Exception:
             pass
 
@@ -215,7 +242,10 @@ class LogSchema(BaseModel):
 async def receive_bot_log(log: LogSchema):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM bots WHERE token = ?", (log.token,))
+    
+    q_param = "%s" if IS_POSTGRES else "?"
+    
+    cursor.execute(f"SELECT id FROM bots WHERE token = {q_param}", (log.token,))
     row = cursor.fetchone()
     if row:
         bot_id = row["id"]
@@ -225,9 +255,9 @@ async def receive_bot_log(log: LogSchema):
         elif "отказ" in log.status_text.lower() or "игнор" in log.status_text.lower():
             st_code = "REFUSAL"
             
-        cursor.execute("""
+        cursor.execute(f"""
             INSERT INTO bot_logs (bot_id, lead_id, lead_username, status_text, timer_sec, is_final_link, status_code)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES ({q_param}, {q_param}, {q_param}, {q_param}, {q_param}, {q_param}, {q_param})
         """, (bot_id, log.lead_id, log.lead_username, log.status_text, log.timer_sec, log.is_final_link, st_code))
         conn.commit()
     conn.close()
@@ -293,11 +323,13 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
 
     conn = get_db()
     cursor = conn.cursor()
+    q_param = "%s" if IS_POSTGRES else "?"
+    
     cursor.execute("SELECT id, name, token, group_name FROM bots")
     bots = cursor.fetchall()
     
     today_str = datetime.now().strftime("%Y-%m-%d")
-    cursor.execute("SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE date(updated_at) = ?", (today_str,))
+    cursor.execute(f"SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE date(updated_at) = {q_param}", (today_str,))
     today_stats = cursor.fetchone()
     total_today = today_stats[0] or 0
     links_today = today_stats[1] or 0
@@ -306,7 +338,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
     for i in range(6, -1, -1):
         d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         chart_labels.append((datetime.now() - timedelta(days=i)).strftime("%d.%m"))
-        cursor.execute("SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE date(updated_at) = ?", (d,))
+        cursor.execute(f"SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE date(updated_at) = {q_param}", (d,))
         res = cursor.fetchone()
         chart_messages.append(res[0] or 0)
         chart_links.append(res[1] or 0)
@@ -362,7 +394,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
             <header class="flex justify-between items-center mb-4 pt-2">
                 <div>
                     <h1 class="text-xl font-bold text-white">📱 Мои Боты</h1>
-                    <p class="text-xs text-gray-400">Центр управления трафиком</p>
+                    <p class="text-xs text-gray-400">Центр управления трафиком {'<span class="text-emerald-400 font-bold">(Postgres ☁️)</span>' if IS_POSTGRES else ''}</p>
                 </div>
                 <div class="flex gap-2 items-center">
                     <a href="/logout" class="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-semibold border border-red-500/20">🚪 Выйти</a>
@@ -385,7 +417,6 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                 </div>
             </div>
 
-            <!-- ИНТЕРАКТИВНЫЙ ГРАФИК С ФИЛЬТРАМИ (СКРИН 5) -->
             <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-6 shadow-xl">
                 <div class="flex justify-between items-center mb-3">
                     <h3 class="text-xs font-semibold text-gray-300">📈 Динамика за 7 дней</h3>
@@ -402,7 +433,6 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
 
             {groups_html}
 
-            <!-- МОДАЛКИ -->
             <div id="addModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
                 <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
                     <h3 class="text-lg font-bold text-white mb-4">➕ Добавить бота</h3>
@@ -432,7 +462,6 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
             </div>
 
             <script>
-                // Drag-and-Drop Логика
                 function allowDrop(ev) {{ ev.preventDefault(); ev.currentTarget.classList.add('border-emerald-500/50', 'bg-emerald-500/5'); }}
                 function leaveDrop(ev) {{ ev.currentTarget.classList.remove('border-emerald-500/50', 'bg-emerald-500/5'); }}
                 function drag(ev, botId) {{ ev.dataTransfer.setData("botId", botId); }}
@@ -440,22 +469,16 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                     ev.preventDefault();
                     leaveDrop(ev);
                     const botId = ev.dataTransfer.getData("botId");
-                    
                     const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = '/move-to-group';
-                    
+                    form.method = 'POST'; form.action = '/move-to-group';
                     const inputBot = document.createElement('input');
                     inputBot.type = 'hidden'; inputBot.name = 'bot_id'; inputBot.value = botId;
-                    
                     const inputGroup = document.createElement('input');
                     inputGroup.type = 'hidden'; inputGroup.name = 'target_group'; inputGroup.value = targetGroup;
-                    
                     form.appendChild(inputBot); form.appendChild(inputGroup);
                     document.body.appendChild(form); form.submit();
                 }}
 
-                // График с фильтрацией
                 const chartCtx = document.getElementById('trafficChart').getContext('2d');
                 const trafficChart = new Chart(chartCtx, {{
                     type: 'line',
@@ -506,21 +529,23 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM bots WHERE id = ?", (bot_id,))
+    q_param = "%s" if IS_POSTGRES else "?"
+    
+    cursor.execute(f"SELECT * FROM bots WHERE id = {q_param}", (bot_id,))
     bot = cursor.fetchone()
     
     if not bot:
         conn.close()
         return RedirectResponse(url="/", status_code=303)
 
-    cursor.execute("SELECT * FROM bot_logs WHERE bot_id = ? ORDER BY updated_at DESC", (bot_id,))
+    cursor.execute(f"SELECT * FROM bot_logs WHERE bot_id = {q_param} ORDER BY updated_at DESC", (bot_id,))
     logs = cursor.fetchall()
 
-    cursor.execute("""
+    cursor.execute(f"""
         SELECT lead_id, lead_username, status_text, timer_sec, is_final_link, status_code, MAX(updated_at) as last_time
         FROM bot_logs 
-        WHERE bot_id = ? 
-        GROUP BY lead_id 
+        WHERE bot_id = {q_param} 
+        GROUP BY lead_id, lead_username, status_text, timer_sec, is_final_link, status_code
         ORDER BY last_time DESC
     """, (bot_id,))
     users_summary = cursor.fetchall()
@@ -529,7 +554,7 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
     for i in range(7):
         d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         d_label = (datetime.now() - timedelta(days=i)).strftime("%d.%m.%Y")
-        cursor.execute("SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE bot_id = ? AND date(updated_at) = ?", (bot_id, d))
+        cursor.execute(f"SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE bot_id = {q_param} AND date(updated_at) = {q_param}", (bot_id, d))
         res = cursor.fetchone()
         daily_stats_html += f"""
         <div class="flex justify-between items-center bg-gray-900 border border-gray-800 rounded-2xl p-3 mb-2 text-xs">
@@ -542,7 +567,6 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
         """
     conn.close()
 
-    # СКРИН 2: ПРОВЕРКА ЛОГОВ (Красивый заглушка если логов нет)
     logs_html = ""
     for l in logs:
         logs_html += f"""
@@ -564,7 +588,6 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
         </div>
         """
 
-    # СКРИН 3: ПРОВЕРКА ЮЗЕРОВ (Красивая заглушка если юзеров нет)
     users_html = ""
     for u in users_summary:
         st_code = u['status_code']
@@ -613,23 +636,10 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
         <title>{bot['name']}</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
-            /* СКРИН 1: КАСТОМНЫЙ СКРОЛЛБАР ДЛЯ РЕДАКТОРА КОДА */
-            .code-editor::-webkit-scrollbar {{
-                width: 8px;
-                height: 8px;
-            }}
-            .code-editor::-webkit-scrollbar-track {{
-                background: #030712;
-                border-radius: 8px;
-            }}
-            .code-editor::-webkit-scrollbar-thumb {{
-                background: #1f2937;
-                border-radius: 8px;
-                border: 2px solid #030712;
-            }}
-            .code-editor::-webkit-scrollbar-thumb:hover {{
-                background: #10b981;
-            }}
+            .code-editor::-webkit-scrollbar {{ width: 8px; height: 8px; }}
+            .code-editor::-webkit-scrollbar-track {{ background: #030712; border-radius: 8px; }}
+            .code-editor::-webkit-scrollbar-thumb {{ background: #1f2937; border-radius: 8px; border: 2px solid #030712; }}
+            .code-editor::-webkit-scrollbar-thumb:hover {{ background: #10b981; }}
         </style>
     </head>
     <body class="bg-gray-950 text-gray-100 min-h-screen p-4 pb-10">
@@ -676,7 +686,6 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
             <div id="tab-logs" class="hidden space-y-2">{logs_html}</div>
             <div id="tab-stats" class="hidden space-y-2">{daily_stats_html}</div>
 
-            <!-- СКРИН 1: РЕДАКТОР КОДА С ПОЛЗУНКОМ И КНОПКОЙ РЕДАКТИРОВАНИЯ -->
             <div id="tab-code" class="hidden space-y-3">
                 <form action="/save-code/{bot_id}" method="POST" class="space-y-3">
                     <div class="flex justify-between items-center mb-1">
@@ -723,7 +732,8 @@ async def move_to_group(bot_id: int = Form(...), target_group: str = Form(...), 
         return RedirectResponse(url="/login", status_code=303)
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("UPDATE bots SET group_name = ? WHERE id = ?", (target_group, bot_id))
+    q_param = "%s" if IS_POSTGRES else "?"
+    cursor.execute(f"UPDATE bots SET group_name = {q_param} WHERE id = {q_param}", (target_group, bot_id))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/", status_code=303)
@@ -734,8 +744,9 @@ async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str
         return RedirectResponse(url="/login", status_code=303)
     conn = get_db()
     cursor = conn.cursor()
+    q_param = "%s" if IS_POSTGRES else "?"
     try:
-        cursor.execute("INSERT INTO bots (name, token, group_name, code_content, owner_username, owner_name) VALUES (?, ?, ?, ?, ?, ?)", 
+        cursor.execute(f"INSERT INTO bots (name, token, group_name, code_content, owner_username, owner_name) VALUES ({q_param}, {q_param}, {q_param}, {q_param}, {q_param}, {q_param})", 
                        (name, token.strip(), group_name.strip(), "", '@new_acc', 'New Manager'))
         conn.commit()
     except Exception: pass
@@ -754,6 +765,8 @@ async def update_owner(bot_id: int, owner_name: str = Form(...), owner_username:
         return RedirectResponse(url="/login", status_code=303)
     conn = get_db()
     cursor = conn.cursor()
+    q_param = "%s" if IS_POSTGRES else "?"
+    
     avatar_url = None
     if avatar_file and avatar_file.filename:
         file_ext = avatar_file.filename.split(".")[-1]
@@ -764,9 +777,9 @@ async def update_owner(bot_id: int, owner_name: str = Form(...), owner_username:
         avatar_url = f"/static/avatars/{file_name}"
 
     if avatar_url:
-        cursor.execute("UPDATE bots SET owner_name = ?, owner_username = ?, owner_avatar = ? WHERE id = ?", (owner_name.strip(), owner_username.strip(), avatar_url, bot_id))
+        cursor.execute(f"UPDATE bots SET owner_name = {q_param}, owner_username = {q_param}, owner_avatar = {q_param} WHERE id = {q_param}", (owner_name.strip(), owner_username.strip(), avatar_url, bot_id))
     else:
-        cursor.execute("UPDATE bots SET owner_name = ?, owner_username = ? WHERE id = ?", (owner_name.strip(), owner_username.strip(), bot_id))
+        cursor.execute(f"UPDATE bots SET owner_name = {q_param}, owner_username = {q_param} WHERE id = {q_param}", (owner_name.strip(), owner_username.strip(), bot_id))
     conn.commit()
     conn.close()
     return RedirectResponse(url=f"/bot/{bot_id}", status_code=303)
@@ -777,7 +790,8 @@ async def save_code(bot_id: int, code_content: str = Form(...), gogoha_strict_se
         return RedirectResponse(url="/login", status_code=303)
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("UPDATE bots SET code_content = ? WHERE id = ?", (code_content, bot_id))
+    q_param = "%s" if IS_POSTGRES else "?"
+    cursor.execute(f"UPDATE bots SET code_content = {q_param} WHERE id = {q_param}", (code_content, bot_id))
     conn.commit()
     conn.close()
     return RedirectResponse(url=f"/bot/{bot_id}", status_code=303)
