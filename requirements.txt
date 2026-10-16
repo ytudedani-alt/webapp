@@ -4,4 +4,3 @@ pydantic
 aiohttp
 aiogram
 psycopg2-binary
-asyncpg
