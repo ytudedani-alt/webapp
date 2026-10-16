@@ -3,3 +3,4 @@ uvicorn
 pydantic
 aiohttp
 aiogram
+python-multipart
