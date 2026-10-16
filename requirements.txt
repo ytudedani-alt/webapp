@@ -1,4 +1,7 @@
 fastapi
 uvicorn
+pydantic
 aiohttp
-python-multipart
+aiogram
+psycopg2-binary
+asyncpg
