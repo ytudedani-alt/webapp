@@ -17,7 +17,7 @@ if DATABASE_URL:
         import psycopg2
         import psycopg2.extras
         IS_POSTGRES = True
-    except ImportError:
+    except Exception:
         IS_POSTGRES = False
 
 app = FastAPI(title="Alex Advanced Bot Control Center")
@@ -26,7 +26,7 @@ os.makedirs("static/avatars", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 def get_db():
-    if IS_POSTGRES:
+    if IS_POSTGRES and DATABASE_URL:
         url = DATABASE_URL
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
@@ -163,7 +163,7 @@ def init_db():
                 owner_username TEXT DEFAULT '',
                 owner_name TEXT DEFAULT '',
                 owner_avatar TEXT DEFAULT 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'
-            )
+            );
         """)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS bot_logs (
@@ -176,7 +176,7 @@ def init_db():
                 is_final_link INTEGER DEFAULT 0,
                 status_code TEXT DEFAULT 'WAITING',
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
+            );
         """)
     else:
         cursor.execute("""
