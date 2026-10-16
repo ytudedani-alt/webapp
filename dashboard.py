@@ -21,6 +21,119 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
+# --- УНИКАЛЬНЫЕ КОДЫ ДЛЯ КАЖДОГО БОТА ---
+CODE_ALEX_1 = '''import asyncio
+import os
+import random
+import sqlite3
+from aiogram import Bot, Dispatcher
+from aiogram.types import Message, BusinessConnection, LinkPreviewOptions
+from aiohttp import web
+import aiohttp
+
+BOT_TOKEN = "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g"
+WEB_APP_URL = "https://webapp-abar.onrender.com/api/log"
+
+FIRST_STEP_MESSAGES = [
+    "Привет, слушай ты искал работу в тик токе ?",
+    "Привет! Слушай, ты искал работу в тик токе?",
+]
+
+FINAL_MESSAGE = "Тогда давай я тебе лучше скину ссылку, там тебе все расскажут и покажут\\n\\nhttps://t.me/+IxbHj9Wmox0zZmFi"
+
+POSITIVE_KEYWORDS = ["да", "ага", "угу", "ну да", "вроде", "типа", "дап", "даа", "го", "+", "хочу", "ищу", "работу"]
+NEGATIVE_KEYWORDS = ["нет", "не", "неа", "не-а", "мимо", "нет спасибо", "не интересует"]
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+async def send_log_to_web(lead_id, status_text, timer_sec, is_final_link=0, lead_username=""):
+    data = {"token": BOT_TOKEN, "lead_id": str(lead_id), "lead_username": lead_username, "status_text": status_text, "timer_sec": timer_sec, "is_final_link": is_final_link}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(WEB_APP_URL, json=data) as resp: pass
+    except Exception as e: print(f"Log Error: {e}")
+
+@dp.business_message()
+async def handle_business_message(message: Message):
+    if message.from_user and message.from_user.is_bot: return
+    conn_id = message.business_connection_id
+    if not conn_id: return
+    
+    chat_id = message.chat.id
+    u_name = message.from_user.username or ""
+    
+    await send_log_to_web(chat_id, "Инициализация диалога. Ожидание 10 минут...", 600, 0, u_name)
+    await asyncio.sleep(600)
+    await bot.send_message(chat_id=chat_id, text=random.choice(FIRST_STEP_MESSAGES), business_connection_id=conn_id)
+    await send_log_to_web(chat_id, "Отправлен 1-й вопрос о работе", 0, 0, u_name)
+
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())'''
+
+CODE_ALEX_2 = CODE_ALEX_1.replace("8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "8989087015:AAHAkK_e-fcIQFLkrfQgs4-ZhrKXcJft1G4")
+
+CODE_SPANH_1 = '''import asyncio
+import os
+import random
+from aiogram import Bot, Dispatcher
+from aiogram.types import Message, BusinessConnection, LinkPreviewOptions
+from aiohttp import web
+import aiohttp
+
+BOT_TOKEN = "8902861284:AAEUL5DImSMqKSYKWdJ_uqlbYdKgBfF9Bq4"
+WEB_APP_URL = "https://webapp-abar.onrender.com/api/log"
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+async def send_log_to_web(lead_id, status_text, timer_sec, is_final_link=0, lead_username=""):
+    data = {"token": BOT_TOKEN, "lead_id": str(lead_id), "lead_username": lead_username, "status_text": status_text, "timer_sec": timer_sec, "is_final_link": is_final_link}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(WEB_APP_URL, json=data) as resp: pass
+    except Exception as e: print(f"Log Error: {e}")
+
+@dp.business_message()
+async def handle_business_message(message: Message):
+    if message.from_user and message.from_user.is_bot: return
+    conn_id = message.business_connection_id
+    if not conn_id: return
+    
+    chat_id = message.chat.id
+    u_name = message.from_user.username or ""
+    
+    await send_log_to_web(chat_id, "Приветствие отправлено. Ожидание ответа...", 180, 0, u_name)
+    await asyncio.sleep(180)
+    await bot.send_message(chat_id=chat_id, text="Тогда держи ссылку: https://t.me/+52YuDrXyAok4ODc6", business_connection_id=conn_id)
+    await send_log_to_web(chat_id, "Финиш: Ссылка успешно отправлена!", 0, 1, u_name)
+
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())'''
+
+CODE_SPANH_2 = CODE_SPANH_1.replace("8902861284:AAEUL5DImSMqKSYKWdJ_uqlbYdKgBfF9Bq4", "8833046723:AAG_el4XirqdoMZLVcZdNWypVzanJkETGnY")
+
+CODE_FLASH = '''import asyncio
+from aiogram import Bot, Dispatcher
+
+BOT_TOKEN = "8586984485:AAE4m73JZGf3s5yfExriJP_C-otyiAWZu8I"
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+async def main():
+    print("Flash Manager Bot Started")
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())'''
+
+
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
@@ -52,22 +165,21 @@ def init_db():
         )
     """)
 
-    # Восстановление стандартного списка ботов
-    full_code_alex = '''# Код бота'''
     default_bots = [
-        ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", full_code_alex, "@alex_acc_1", "Alex Manager 1"),
-        ("Alex Bot 2", "8989087015:AAHAkK_e-fcIQFLkrfQgs4-ZhrKXcJft1G4", "Alex Group", full_code_alex, "@alex_acc_2", "Alex Manager 2"),
-        ("Spanh Bot 1", "8902861284:AAEUL5DImSMqKSYKWdJ_uqlbYdKgBfF9Bq4", "Spanh Group", full_code_alex, "@spanh_acc_1", "Spanh Manager 1"),
-        ("Spanh Bot 2", "8833046723:AAG_el4XirqdoMZLVcZdNWypVzanJkETGnY", "Spanh Group", full_code_alex, "@spanh_acc_2", "Spanh Manager 2"),
-        ("Flash Manager Bot", "8586984485:AAE4m73JZGf3s5yfExriJP_C-otyiAWZu8I", "Общие", full_code_alex, "@flash_meneger", "Flash Manager")
+        ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", CODE_ALEX_1, "@alex_acc_1", "Alex Manager 1"),
+        ("Alex Bot 2", "8989087015:AAHAkK_e-fcIQFLkrfQgs4-ZhrKXcJft1G4", "Alex Group", CODE_ALEX_2, "@alex_acc_2", "Alex Manager 2"),
+        ("Spanh Bot 1", "8902861284:AAEUL5DImSMqKSYKWdJ_uqlbYdKgBfF9Bq4", "Spanh Group", CODE_SPANH_1, "@spanh_acc_1", "Spanh Manager 1"),
+        ("Spanh Bot 2", "8833046723:AAG_el4XirqdoMZLVcZdNWypVzanJkETGnY", "Spanh Group", CODE_SPANH_2, "@spanh_acc_2", "Spanh Manager 2"),
+        ("Flash Manager Bot", "8586984485:AAE4m73JZGf3s5yfExriJP_C-otyiAWZu8I", "Общие", CODE_FLASH, "@flash_meneger", "Flash Manager")
     ]
     
     for name, token, group, code, o_user, o_name in default_bots:
         try:
             cursor.execute("""
-                INSERT OR IGNORE INTO bots (name, token, group_name, code_content, owner_username, owner_name) 
+                INSERT INTO bots (name, token, group_name, code_content, owner_username, owner_name) 
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (name, token, group, code, o_user, o_name))
+                ON CONFLICT(token) DO UPDATE SET code_content = CASE WHEN code_content = '' THEN ? ELSE code_content END
+            """, (name, token, group, code, o_user, o_name, code))
         except Exception:
             pass
 
@@ -82,10 +194,8 @@ async def self_ping_webapp():
     async with aiohttp.ClientSession() as session:
         while True:
             try:
-                async with session.get(render_url) as response:
-                    print(f"[WEB PING] Статус: {response.status}")
-            except Exception as e:
-                print(f"[WEB PING] Ошибка: {e}")
+                async with session.get(render_url) as response: pass
+            except Exception: pass
             await asyncio.sleep(300)
 
 @app.on_event("startup")
@@ -122,20 +232,6 @@ async def receive_bot_log(log: LogSchema):
         conn.commit()
     conn.close()
     return {"status": "ok"}
-
-async def get_bot_api_info(token: str):
-    bot_info = {"username": "@bot", "name": "Telegram Bot"}
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"https://api.telegram.org/bot{token}/getMe") as resp:
-                data = await resp.json()
-                if data.get("ok"):
-                    res = data["result"]
-                    bot_info["username"] = f"@{res.get('username', 'bot')}"
-                    bot_info["name"] = res.get('first_name', 'Bot')
-    except Exception:
-        pass
-    return bot_info
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(response: Response, error: str = None):
@@ -218,8 +314,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
     groups = {}
     for bot in bots:
         group = bot["group_name"]
-        if group not in groups:
-            groups[group] = []
+        if group not in groups: groups[group] = []
         groups[group].append(bot)
     conn.close()
 
@@ -228,7 +323,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
         bots_cards = ""
         for b in g_bots:
             bots_cards += f"""
-            <div class="bg-gray-900 border border-gray-800 hover:border-emerald-500/50 rounded-2xl p-4 shadow-lg mb-3 flex justify-between items-center">
+            <div id="bot-card-{b['id']}" draggable="true" ondragstart="drag(event, {b['id']})" class="bg-gray-900 border border-gray-800 hover:border-emerald-500/50 rounded-2xl p-4 shadow-lg mb-3 flex justify-between items-center cursor-grab active:cursor-grabbing transition transform hover:-translate-y-0.5">
                 <a href="/bot/{b['id']}" class="flex-grow">
                     <div class="flex justify-between items-start mb-1">
                         <h3 class="font-semibold text-emerald-400">🤖 {b['name']}</h3>
@@ -236,10 +331,15 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                     </div>
                     <p class="text-xs text-gray-500 font-mono truncate">Token: {b['token'][:10]}...</p>
                 </a>
+                <form action="/move-to-group" method="POST" class="ml-2">
+                    <input type="hidden" name="bot_id" value="{b['id']}">
+                    <input type="hidden" name="target_group" value="Общие">
+                    {'<button type="submit" class="text-xs text-gray-500 hover:text-red-400 p-1" title="Сбросить в Общие">❌</button>' if group_name != 'Общие' else ''}
+                </form>
             </div>
             """
         groups_html += f"""
-        <div class="mb-6">
+        <div class="mb-6 drop-zone p-2 rounded-2xl transition border border-transparent" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)" ondrop="drop(event, '{group_name}')">
             <div class="flex items-center justify-between mb-3">
                 <span class="text-sm font-bold text-gray-300">📁 {group_name} ({len(g_bots)})</span>
             </div>
@@ -257,7 +357,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
         <script src="https://cdn.tailwindcss.com"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     </head>
-    <body class="bg-gray-950 text-gray-100 min-h-screen p-4 pb-10">
+    <body class="bg-gray-950 text-gray-100 min-h-screen p-4 pb-10 select-none">
         <div class="max-w-md mx-auto">
             <header class="flex justify-between items-center mb-4 pt-2">
                 <div>
@@ -285,8 +385,16 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                 </div>
             </div>
 
+            <!-- ИНТЕРАКТИВНЫЙ ГРАФИК С ФИЛЬТРАМИ (СКРИН 5) -->
             <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-6 shadow-xl">
-                <h3 class="text-xs font-semibold text-gray-300 mb-3">📈 Динамика за 7 дней</h3>
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-xs font-semibold text-gray-300">📈 Динамика за 7 дней</h3>
+                    <div class="flex gap-1 bg-gray-950 p-1 rounded-xl border border-gray-800">
+                        <button onclick="filterChart('all')" id="filter-all" class="px-2 py-0.5 text-[10px] rounded-lg font-bold bg-emerald-500 text-gray-950">Все</button>
+                        <button onclick="filterChart('leads')" id="filter-leads" class="px-2 py-0.5 text-[10px] rounded-lg font-semibold text-gray-400 hover:text-white">Лиды</button>
+                        <button onclick="filterChart('links')" id="filter-links" class="px-2 py-0.5 text-[10px] rounded-lg font-semibold text-gray-400 hover:text-white">Ссылки</button>
+                    </div>
+                </div>
                 <div class="relative h-48 w-full">
                     <canvas id="trafficChart"></canvas>
                 </div>
@@ -294,22 +402,14 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
 
             {groups_html}
 
+            <!-- МОДАЛКИ -->
             <div id="addModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
                 <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
                     <h3 class="text-lg font-bold text-white mb-4">➕ Добавить бота</h3>
                     <form action="/add-bot" method="POST" class="space-y-3">
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">Название</label>
-                            <input type="text" name="name" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">Группа / Папка</label>
-                            <input type="text" id="modalGroupName" name="group_name" value="Общие" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">Token</label>
-                            <input type="text" name="token" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white" placeholder="123456:ABC...">
-                        </div>
+                        <input type="text" name="name" placeholder="Название" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white">
+                        <input type="text" id="modalGroupName" name="group_name" value="Общие" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white">
+                        <input type="text" name="token" placeholder="Token: 123456:ABC..." required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white">
                         <div class="flex gap-3 pt-2">
                             <button type="button" onclick="closeModal()" class="w-1/2 bg-gray-800 text-gray-300 py-3 rounded-xl text-sm font-medium">Отмена</button>
                             <button type="submit" class="w-1/2 bg-emerald-500 text-gray-950 font-bold py-3 rounded-xl text-sm">Сохранить</button>
@@ -322,10 +422,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                 <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
                     <h3 class="text-lg font-bold text-white mb-4">📁 Новая группа</h3>
                     <form action="/add-group" method="POST" class="space-y-3">
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">Название группы</label>
-                            <input type="text" name="group_name" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white">
-                        </div>
+                        <input type="text" name="group_name" placeholder="Название группы" required class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-white">
                         <div class="flex gap-3 pt-2">
                             <button type="button" onclick="closeGroupModal()" class="w-1/2 bg-gray-800 text-gray-300 py-3 rounded-xl text-sm font-medium">Отмена</button>
                             <button type="submit" class="w-1/2 bg-emerald-500 text-gray-950 font-bold py-3 rounded-xl text-sm">Создать</button>
@@ -333,20 +430,63 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                     </form>
                 </div>
             </div>
-            
+
             <script>
+                // Drag-and-Drop Логика
+                function allowDrop(ev) {{ ev.preventDefault(); ev.currentTarget.classList.add('border-emerald-500/50', 'bg-emerald-500/5'); }}
+                function leaveDrop(ev) {{ ev.currentTarget.classList.remove('border-emerald-500/50', 'bg-emerald-500/5'); }}
+                function drag(ev, botId) {{ ev.dataTransfer.setData("botId", botId); }}
+                function drop(ev, targetGroup) {{
+                    ev.preventDefault();
+                    leaveDrop(ev);
+                    const botId = ev.dataTransfer.getData("botId");
+                    
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '/move-to-group';
+                    
+                    const inputBot = document.createElement('input');
+                    inputBot.type = 'hidden'; inputBot.name = 'bot_id'; inputBot.value = botId;
+                    
+                    const inputGroup = document.createElement('input');
+                    inputGroup.type = 'hidden'; inputGroup.name = 'target_group'; inputGroup.value = targetGroup;
+                    
+                    form.appendChild(inputBot); form.appendChild(inputGroup);
+                    document.body.appendChild(form); form.submit();
+                }}
+
+                // График с фильтрацией
                 const chartCtx = document.getElementById('trafficChart').getContext('2d');
-                new Chart(chartCtx, {{
+                const trafficChart = new Chart(chartCtx, {{
                     type: 'line',
                     data: {{
                         labels: {chart_labels},
                         datasets: [
-                            {{ label: 'Лиды', data: {chart_messages}, borderColor: '#34d399', backgroundColor: 'rgba(52, 211, 153, 0.1)', borderWidth: 2, tension: 0.4, fill: true }},
-                            {{ label: 'Ссылки', data: {chart_links}, borderColor: '#38bdf8', borderWidth: 2, tension: 0.4 }}
+                            {{ label: 'Лиды', data: {chart_messages}, borderColor: '#34d399', backgroundColor: 'rgba(52, 211, 153, 0.15)', borderWidth: 2, tension: 0.4, fill: true }},
+                            {{ label: 'Ссылки', data: {chart_links}, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.15)', borderWidth: 2, tension: 0.4, fill: true }}
                         ]
                     }},
-                    options: {{ responsive: true, maintainAspectRatio: false }}
+                    options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ labels: {{ color: '#9ca3af', font: {{ size: 10 }} }} }} }} }}
                 }});
+
+                function filterChart(type) {{
+                    ['all', 'leads', 'links'].forEach(t => {{
+                        document.getElementById('filter-' + t).className = 'px-2 py-0.5 text-[10px] rounded-lg font-semibold text-gray-400 hover:text-white';
+                    }});
+                    document.getElementById('filter-' + type).className = 'px-2 py-0.5 text-[10px] rounded-lg font-bold bg-emerald-500 text-gray-950';
+
+                    if(type === 'all') {{
+                        trafficChart.setDatasetVisibility(0, true);
+                        trafficChart.setDatasetVisibility(1, true);
+                    }} else if(type === 'leads') {{
+                        trafficChart.setDatasetVisibility(0, true);
+                        trafficChart.setDatasetVisibility(1, false);
+                    }} else if(type === 'links') {{
+                        trafficChart.setDatasetVisibility(0, false);
+                        trafficChart.setDatasetVisibility(1, true);
+                    }}
+                    trafficChart.update();
+                }}
 
                 function openModal() {{ document.getElementById('addModal').classList.remove('hidden'); document.getElementById('addModal').classList.add('flex'); }}
                 function closeModal() {{ document.getElementById('addModal').classList.add('hidden'); document.getElementById('addModal').classList.remove('flex'); }}
@@ -402,6 +542,7 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
         """
     conn.close()
 
+    # СКРИН 2: ПРОВЕРКА ЛОГОВ (Красивый заглушка если логов нет)
     logs_html = ""
     for l in logs:
         logs_html += f"""
@@ -414,20 +555,29 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
             <div class="text-[10px] text-gray-500 mt-1">{l['updated_at']}</div>
         </div>
         """
+    if not logs:
+        logs_html = """
+        <div class="text-center py-8 bg-gray-900/50 border border-gray-800 rounded-2xl">
+            <div class="text-2xl mb-2">📜</div>
+            <p class="text-xs text-gray-400 font-medium">Логи пока пусты</p>
+            <p class="text-[10px] text-gray-600 mt-1">Ожидание событий от запущенного бота...</p>
+        </div>
+        """
 
+    # СКРИН 3: ПРОВЕРКА ЮЗЕРОВ (Красивая заглушка если юзеров нет)
     users_html = ""
     for u in users_summary:
         st_code = u['status_code']
         is_link = u['is_final_link']
         
         if is_link == 1 or st_code == 'SUCCESS':
-            badge = '<span class="px-2 py-1 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 font-semibold text-[11px] flex items-center gap-1">✅ Ссылка отправлена</span>'
+            badge = '<span class="px-2 py-1 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 font-semibold text-[11px]">✅ Ссылка отправлена</span>'
             status_dot = "🟢"
         elif st_code == 'REFUSAL':
-            badge = '<span class="px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 font-semibold text-[11px] flex items-center gap-1">❌ Отказ</span>'
+            badge = '<span class="px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 font-semibold text-[11px]">❌ Отказ</span>'
             status_dot = "🔴"
         else:
-            badge = '<span class="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 font-semibold text-[11px] flex items-center gap-1">⚙️ В ожидании</span>'
+            badge = '<span class="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 font-semibold text-[11px]">⚙️ В процессе</span>'
             status_dot = "🟠"
 
         user_disp = f"@{u['lead_username']}" if u['lead_username'] else f"ID: {u['lead_id']}"
@@ -445,8 +595,14 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
             <div>{badge}</div>
         </div>
         """
-    if not users_html:
-        users_html = "<p class='text-center text-gray-500 text-xs py-4'>База юзеров пуста</p>"
+    if not users_summary:
+        users_html = """
+        <div class="text-center py-8 bg-gray-900/50 border border-gray-800 rounded-2xl">
+            <div class="text-2xl mb-2">👤</div>
+            <p class="text-xs text-gray-400 font-medium">Список юзеров пока пуст</p>
+            <p class="text-[10px] text-gray-600 mt-1">Здесь будут отображаться юзернеймы лидов и их статусы</p>
+        </div>
+        """
 
     html_content = f"""
     <!DOCTYPE html>
@@ -456,6 +612,25 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{bot['name']}</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            /* СКРИН 1: КАСТОМНЫЙ СКРОЛЛБАР ДЛЯ РЕДАКТОРА КОДА */
+            .code-editor::-webkit-scrollbar {{
+                width: 8px;
+                height: 8px;
+            }}
+            .code-editor::-webkit-scrollbar-track {{
+                background: #030712;
+                border-radius: 8px;
+            }}
+            .code-editor::-webkit-scrollbar-thumb {{
+                background: #1f2937;
+                border-radius: 8px;
+                border: 2px solid #030712;
+            }}
+            .code-editor::-webkit-scrollbar-thumb:hover {{
+                background: #10b981;
+            }}
+        </style>
     </head>
     <body class="bg-gray-950 text-gray-100 min-h-screen p-4 pb-10">
         <div class="max-w-md mx-auto">
@@ -497,26 +672,32 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 <button onclick="switchTab('code')" id="btn-code" class="py-2 px-1 rounded-xl text-[10px] font-semibold text-gray-400 transition text-center">💻 Код</button>
             </div>
 
-            <div id="tab-users" class="space-y-2">
-                {users_html}
-            </div>
+            <div id="tab-users" class="space-y-2">{users_html}</div>
+            <div id="tab-logs" class="hidden space-y-2">{logs_html}</div>
+            <div id="tab-stats" class="hidden space-y-2">{daily_stats_html}</div>
 
-            <div id="tab-logs" class="hidden space-y-2">
-                {logs_html}
-            </div>
-
-            <div id="tab-stats" class="hidden space-y-2">
-                {daily_stats_html}
-            </div>
-
-            <div id="tab-code" class="hidden">
+            <!-- СКРИН 1: РЕДАКТОР КОДА С ПОЛЗУНКОМ И КНОПКОЙ РЕДАКТИРОВАНИЯ -->
+            <div id="tab-code" class="hidden space-y-3">
                 <form action="/save-code/{bot_id}" method="POST" class="space-y-3">
-                    <textarea name="code_content" class="w-full min-h-[400px] bg-gray-900 border border-gray-800 rounded-xl p-3 text-xs font-mono text-emerald-400">{bot['code_content']}</textarea>
-                    <button type="submit" class="w-full bg-emerald-500 text-gray-950 font-bold py-3 rounded-xl text-sm">💾 Сохранить код</button>
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs text-gray-400"># Полный код бота</span>
+                        <button type="button" onclick="enableCodeEdit()" id="btn-edit-code" class="text-xs text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded-lg bg-emerald-500/10">✏️ Изменить код</button>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-2 shadow-lg">
+                        <textarea id="code-area" readonly name="code_content" class="code-editor w-full h-[420px] bg-gray-950 border border-gray-800/80 rounded-xl p-3 text-xs font-mono text-emerald-400 focus:outline-none leading-relaxed resize-y whitespace-pre overflow-auto">{bot['code_content']}</textarea>
+                    </div>
+                    <button type="submit" id="btn-save-code" class="w-full bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold py-3 rounded-xl text-sm shadow-lg shadow-emerald-500/20 transition">💾 Сохранить и обновить код</button>
                 </form>
             </div>
 
             <script>
+                function enableCodeEdit() {{
+                    const area = document.getElementById('code-area');
+                    area.removeAttribute('readonly');
+                    area.focus();
+                    document.getElementById('btn-edit-code').innerText = '🔓 Режим редактирования';
+                    document.getElementById('btn-edit-code').className = 'text-xs text-green-400 font-bold';
+                }}
                 function toggleEditOwner() {{
                     document.getElementById('owner-display').classList.toggle('hidden');
                     document.getElementById('owner-form').classList.toggle('hidden');
@@ -536,6 +717,17 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
     """
     return HTMLResponse(content=html_content)
 
+@app.post("/move-to-group")
+async def move_to_group(bot_id: int = Form(...), target_group: str = Form(...), gogoha_strict_session: str = Cookie(None)):
+    if gogoha_strict_session != "active_valid_session":
+        return RedirectResponse(url="/login", status_code=303)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE bots SET group_name = ? WHERE id = ?", (target_group, bot_id))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/", status_code=303)
+
 @app.post("/add-bot")
 async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str = Form(...), gogoha_strict_session: str = Cookie(None)):
     if gogoha_strict_session != "active_valid_session":
@@ -546,8 +738,7 @@ async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str
         cursor.execute("INSERT INTO bots (name, token, group_name, code_content, owner_username, owner_name) VALUES (?, ?, ?, ?, ?, ?)", 
                        (name, token.strip(), group_name.strip(), "", '@new_acc', 'New Manager'))
         conn.commit()
-    except Exception:
-        pass
+    except Exception: pass
     conn.close()
     return RedirectResponse(url="/", status_code=303)
 
@@ -563,7 +754,6 @@ async def update_owner(bot_id: int, owner_name: str = Form(...), owner_username:
         return RedirectResponse(url="/login", status_code=303)
     conn = get_db()
     cursor = conn.cursor()
-    
     avatar_url = None
     if avatar_file and avatar_file.filename:
         file_ext = avatar_file.filename.split(".")[-1]
@@ -577,7 +767,6 @@ async def update_owner(bot_id: int, owner_name: str = Form(...), owner_username:
         cursor.execute("UPDATE bots SET owner_name = ?, owner_username = ?, owner_avatar = ? WHERE id = ?", (owner_name.strip(), owner_username.strip(), avatar_url, bot_id))
     else:
         cursor.execute("UPDATE bots SET owner_name = ?, owner_username = ? WHERE id = ?", (owner_name.strip(), owner_username.strip(), bot_id))
-        
     conn.commit()
     conn.close()
     return RedirectResponse(url=f"/bot/{bot_id}", status_code=303)
