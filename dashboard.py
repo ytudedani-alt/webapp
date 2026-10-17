@@ -253,7 +253,6 @@ async def receive_bot_log(log: LogSchema):
     conn.close()
     return {"status": "ok"}
 
-# --- ЭНДПОИНТЫ ДЛЯ ТИКТОК ПАРСЕРА И СЕРВЕРА ---
 @app.get("/api/server-status")
 async def server_status():
     cpu_usage = psutil.cpu_percent(interval=0.5)
@@ -382,7 +381,6 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
         chart_messages.append(res[0] or 0)
         chart_links.append(res[1] or 0)
 
-    # TikTok ссылки
     cursor.execute("SELECT * FROM tiktok_links ORDER BY created_at DESC")
     tiktok_links = cursor.fetchall()
     conn.close()
@@ -457,7 +455,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                 </div>
             </header>
 
-            <!-- НАВИГАЦИОННЫЕ ВАКЛАДКИ -->
+            <!-- НАВИГАЦИОННЫЕ ВКЛАДКИ -->
             <div class="flex bg-gray-900 border border-gray-800 rounded-2xl p-1 mb-4">
                 <button onclick="switchTab('bots')" id="tab-btn-bots" class="flex-1 py-2 text-center text-xs font-bold rounded-xl bg-emerald-500 text-gray-950 transition">🤖 Боты</button>
                 <button onclick="switchTab('server')" id="tab-btn-server" class="flex-1 py-2 text-center text-xs font-semibold text-gray-400 hover:text-white transition">🖥️ Сервер</button>
@@ -575,7 +573,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                     <h3 class="text-xs font-bold text-white mb-3 flex items-center gap-1.5">🔍 Проверка ссылки на дубликат</h3>
                     <div class="space-y-3">
                         <input type="text" id="check-url-input" placeholder="Вставьте ссылку для проверки..." class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500">
-                        <button onclick="checkTikTokUrl()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg">Проверить ссылку</button>
+                        <button type="button" onclick="checkTikTokUrl()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg">Проверить ссылку</button>
                         <div id="check-result-box" class="hidden p-3 rounded-xl border text-xs text-center font-bold"></div>
                     </div>
                 </div>
@@ -712,9 +710,8 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                 function openModal() {{ document.getElementById('addModal').classList.remove('hidden'); document.getElementById('addModal').classList.add('flex'); }}
                 function closeModal() {{ document.getElementById('addModal').classList.add('hidden'); document.getElementById('addModal').classList.remove('flex'); }}
                 function openGroupModal() {{ document.getElementById('groupModal').classList.remove('hidden'); document.getElementById('groupModal').classList.add('flex'); }}
-                function closeGroupModal() {{ document.getElementById('groupModal').classList.add('hidden'); document.getElementById('groupModal').classList.remove('flex'); }}
+                function closeGroupModal() {{ document.getElementById('groupModal').classList.remove('hidden'); document.getElementById('groupModal').classList.add('flex'); }}
 
-                // Автоматическое переключение вкладки при редиректе
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('tab') === 'tiktok') switchTab('tiktok');
             </script>
@@ -881,5 +878,5 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 10000))
     uvicorn.run("dashboard:app", host="0.0.0.0", port=port)
