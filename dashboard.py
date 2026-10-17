@@ -8,6 +8,7 @@ import aiohttp
 import asyncio
 from datetime import datetime, timedelta
 import shutil
+import psutil
 
 app = FastAPI(title="Alex Advanced Bot Control Center")
 
@@ -163,6 +164,14 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tiktok_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     default_bots = [
         ("Alex Bot 1", "8636464152:AAG_PzFg2JUqn6N0mPVrtbv574rXlIuwv6g", "Alex Group", CODE_ALEX_1, "@alex_acc_1", "Alex Manager 1"),
         ("Alex Bot 2", "8989087015:AAHAkK_e-fcIQFLkrfQgs4-ZhrKXcJft1G4", "Alex Group", CODE_ALEX_2, "@alex_acc_2", "Alex Manager 2"),
@@ -244,6 +253,57 @@ async def receive_bot_log(log: LogSchema):
     conn.close()
     return {"status": "ok"}
 
+# --- ЭНДПОИНТЫ ДЛЯ ТИКТОК ПАРСЕРА И СЕРВЕРА ---
+@app.get("/api/server-status")
+async def server_status():
+    cpu_usage = psutil.cpu_percent(interval=0.5)
+    ram = psutil.virtual_memory()
+    disk = psutil.disk_usage('/')
+    return {
+        "hostname": "striped-black",
+        "tariff": "SWE-PROMO",
+        "ip": "194.76.136.240",
+        "os": "Ubuntu 26.04",
+        "cpu_cores": 1,
+        "cpu_usage": cpu_usage,
+        "ram_total": round(ram.total / (1024**3), 2),
+        "ram_used": round(ram.used / (1024**3), 2),
+        "ram_percent": ram.percent,
+        "disk_total": round(disk.total / (1024**3), 2),
+        "disk_percent": disk.percent,
+        "status": "Активен",
+        "expires": "16.11.2026, 14:08",
+        "cost": "€ 1.99 / месяц"
+    }
+
+@app.post("/api/tiktok/add")
+async def add_tiktok_link(url: str = Form(...)):
+    url = url.strip()
+    if not url:
+        return RedirectResponse(url="/?tab=tiktok&msg=empty", status_code=303)
+    try:
+        conn = get_db()
+        conn.execute("INSERT INTO tiktok_links (url) VALUES (?)", (url,))
+        conn.commit()
+        conn.close()
+        return RedirectResponse(url="/?tab=tiktok&msg=added", status_code=303)
+    except sqlite3.IntegrityError:
+        return RedirectResponse(url="/?tab=tiktok&msg=exists", status_code=303)
+
+@app.post("/api/tiktok/check")
+async def check_tiktok_link(data: dict):
+    url = data.get("url", "").strip()
+    if not url:
+        return {"exists": False, "message": "Введите ссылку"}
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM tiktok_links WHERE url = ?", (url,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {"exists": True, "message": "❌ Эта ссылка уже в списке!"}
+    return {"exists": False, "message": "✅ Ссылки нет в списке (можно использовать)"}
+
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(response: Response, error: str = None):
     err_html = f'<div class="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-xl text-xs text-center mb-4">{error}</div>' if error else ''
@@ -322,12 +382,16 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
         chart_messages.append(res[0] or 0)
         chart_links.append(res[1] or 0)
 
+    # TikTok ссылки
+    cursor.execute("SELECT * FROM tiktok_links ORDER BY created_at DESC")
+    tiktok_links = cursor.fetchall()
+    conn.close()
+
     groups = {}
     for bot in bots:
         group = bot["group_name"]
         if group not in groups: groups[group] = []
         groups[group].append(bot)
-    conn.close()
 
     groups_html = ""
     for group_name, g_bots in groups.items():
@@ -358,6 +422,17 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
         </div>
         """
 
+    tiktok_rows_html = ""
+    for link in tiktok_links:
+        tiktok_rows_html += f"""
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 mb-2 flex justify-between items-center text-xs">
+            <span class="text-emerald-400 font-mono truncate max-w-[240px]">{link['url']}</span>
+            <span class="text-[10px] text-gray-500">{link['created_at']}</span>
+        </div>
+        """
+    if not tiktok_links:
+        tiktok_rows_html = '<div class="text-center py-6 text-xs text-gray-500">Список ссылок пуст</div>'
+
     html_content = f"""
     <!DOCTYPE html>
     <html lang="ru">
@@ -382,36 +457,137 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                 </div>
             </header>
 
-            <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
-                <h3 class="text-xs font-semibold text-gray-300 mb-3">📊 Статистика за сегодня</h3>
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
-                        <div class="text-xs text-gray-400">Лидов в обработке</div>
-                        <div class="text-lg font-bold text-emerald-400">{total_today}</div>
+            <!-- НАВИГАЦИОННЫЕ ВАКЛАДКИ -->
+            <div class="flex bg-gray-900 border border-gray-800 rounded-2xl p-1 mb-4">
+                <button onclick="switchTab('bots')" id="tab-btn-bots" class="flex-1 py-2 text-center text-xs font-bold rounded-xl bg-emerald-500 text-gray-950 transition">🤖 Боты</button>
+                <button onclick="switchTab('server')" id="tab-btn-server" class="flex-1 py-2 text-center text-xs font-semibold text-gray-400 hover:text-white transition">🖥️ Сервер</button>
+                <button onclick="switchTab('tiktok')" id="tab-btn-tiktok" class="flex-1 py-2 text-center text-xs font-semibold text-gray-400 hover:text-white transition">🎵 Тик Ток парсер</button>
+            </div>
+
+            <!-- СЕКЦИЯ 1: БОТЫ И СТАТИСТИКА -->
+            <div id="section-bots">
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
+                    <h3 class="text-xs font-semibold text-gray-300 mb-3">📊 Статистика за сегодня</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
+                            <div class="text-xs text-gray-400">Лидов в обработке</div>
+                            <div class="text-lg font-bold text-emerald-400">{total_today}</div>
+                        </div>
+                        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
+                            <div class="text-xs text-gray-400">Успешно ссылок</div>
+                            <div class="text-lg font-bold text-purple-400">{links_today}</div>
+                        </div>
                     </div>
-                    <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
-                        <div class="text-xs text-gray-400">Успешно ссылок</div>
-                        <div class="text-lg font-bold text-purple-400">{links_today}</div>
+                </div>
+
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-6 shadow-xl">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-xs font-semibold text-gray-300">📈 Динамика за 7 дней</h3>
+                        <div class="flex gap-1 bg-gray-950 p-1 rounded-xl border border-gray-800">
+                            <button onclick="filterChart('all')" id="filter-all" class="px-2 py-0.5 text-[10px] rounded-lg font-bold bg-emerald-500 text-gray-950">Все</button>
+                            <button onclick="filterChart('leads')" id="filter-leads" class="px-2 py-0.5 text-[10px] rounded-lg font-semibold text-gray-400 hover:text-white">Лиды</button>
+                            <button onclick="filterChart('links')" id="filter-links" class="px-2 py-0.5 text-[10px] rounded-lg font-semibold text-gray-400 hover:text-white">Ссылки</button>
+                        </div>
+                    </div>
+                    <div class="relative h-48 w-full">
+                        <canvas id="trafficChart"></canvas>
+                    </div>
+                </div>
+
+                {groups_html}
+            </div>
+
+            <!-- СЕКЦИЯ 2: СЕРВЕР -->
+            <div id="section-server" class="hidden">
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-4 shadow-xl">
+                    <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-800">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-base font-bold text-white">🇸🇪 striped-black</span>
+                                <span class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-lg">SWE-PROMO</span>
+                            </div>
+                            <div class="text-xs text-gray-400 font-mono mt-0.5">IP: 194.76.136.240</div>
+                        </div>
+                        <div class="text-right">
+                            <span class="inline-flex items-center gap-1 text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/20">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                Активен
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 text-xs mb-4">
+                        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
+                            <div class="text-gray-500 mb-0.5">ОС / Логин</div>
+                            <div class="font-bold text-white">Ubuntu 26.04 (root)</div>
+                        </div>
+                        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
+                            <div class="text-gray-500 mb-0.5">Тариф / Цена</div>
+                            <div class="font-bold text-emerald-400">€ 1.99 / месяц</div>
+                        </div>
+                        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
+                            <div class="text-gray-500 mb-0.5">Процессор</div>
+                            <div class="font-bold text-white">1 CPU core</div>
+                        </div>
+                        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
+                            <div class="text-gray-500 mb-0.5">Действует до</div>
+                            <div class="font-bold text-purple-400">16.11.2026, 14:08</div>
+                        </div>
+                    </div>
+
+                    <!-- ДИНАМИЧЕСКИЕ МЕТРИКИ -->
+                    <div class="space-y-3 pt-2">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-400">Загрузка CPU</span>
+                                <span id="srv-cpu" class="font-mono text-emerald-400">--%</span>
+                            </div>
+                            <div class="w-full bg-gray-950 h-2 rounded-full overflow-hidden border border-gray-800">
+                                <div id="srv-cpu-bar" class="bg-emerald-500 h-full w-0 transition-all duration-500"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-400">Оперативная память (RAM)</span>
+                                <span id="srv-ram" class="font-mono text-purple-400">-- / 4 GB</span>
+                            </div>
+                            <div class="w-full bg-gray-950 h-2 rounded-full overflow-hidden border border-gray-800">
+                                <div id="srv-ram-bar" class="bg-purple-500 h-full w-0 transition-all duration-500"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-6 shadow-xl">
-                <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-xs font-semibold text-gray-300">📈 Динамика за 7 дней</h3>
-                    <div class="flex gap-1 bg-gray-950 p-1 rounded-xl border border-gray-800">
-                        <button onclick="filterChart('all')" id="filter-all" class="px-2 py-0.5 text-[10px] rounded-lg font-bold bg-emerald-500 text-gray-950">Все</button>
-                        <button onclick="filterChart('leads')" id="filter-leads" class="px-2 py-0.5 text-[10px] rounded-lg font-semibold text-gray-400 hover:text-white">Лиды</button>
-                        <button onclick="filterChart('links')" id="filter-links" class="px-2 py-0.5 text-[10px] rounded-lg font-semibold text-gray-400 hover:text-white">Ссылки</button>
+            <!-- СЕКЦИЯ 3: ТИК ТОК ПАРСЕР -->
+            <div id="section-tiktok" class="hidden">
+                <!-- ФОРМА ДОБАВЛЕНИЯ -->
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
+                    <h3 class="text-xs font-bold text-white mb-3 flex items-center gap-1.5">➕ Добавить ссылку TikTok</h3>
+                    <form action="/api/tiktok/add" method="POST" class="flex gap-2">
+                        <input type="text" name="url" required placeholder="https://www.tiktok.com/@..." class="flex-grow bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500">
+                        <button type="submit" class="bg-emerald-500 text-gray-950 font-bold px-4 py-2.5 rounded-xl text-xs hover:bg-emerald-400">+ Добавить</button>
+                    </form>
+                </div>
+
+                <!-- ФОРМА ПРОВЕРКИ ССЫЛКИ -->
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
+                    <h3 class="text-xs font-bold text-white mb-3 flex items-center gap-1.5">🔍 Проверка ссылки на дубликат</h3>
+                    <div class="space-y-3">
+                        <input type="text" id="check-url-input" placeholder="Вставьте ссылку для проверки..." class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500">
+                        <button onclick="checkTikTokUrl()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg">Проверить ссылку</button>
+                        <div id="check-result-box" class="hidden p-3 rounded-xl border text-xs text-center font-bold"></div>
                     </div>
                 </div>
-                <div class="relative h-48 w-full">
-                    <canvas id="trafficChart"></canvas>
+
+                <!-- СПИСОК ССЫЛОК -->
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
+                    <h3 class="text-xs font-bold text-gray-300 mb-3">📋 Сохраненные ссылки в базе</h3>
+                    {tiktok_rows_html}
                 </div>
             </div>
 
-            {groups_html}
-
+            <!-- МОДАЛЬНЫЕ ОКНА -->
             <div id="addModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
                 <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
                     <h3 class="text-lg font-bold text-white mb-4">➕ Добавить бота</h3>
@@ -441,6 +617,49 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
             </div>
 
             <script>
+                function switchTab(tab) {{
+                    ['bots', 'server', 'tiktok'].forEach(t => {{
+                        document.getElementById('section-' + t).classList.add('hidden');
+                        document.getElementById('tab-btn-' + t).className = 'flex-1 py-2 text-center text-xs font-semibold text-gray-400 hover:text-white transition';
+                    }});
+                    document.getElementById('section-' + tab).classList.remove('hidden');
+                    document.getElementById('tab-btn-' + tab).className = 'flex-1 py-2 text-center text-xs font-bold rounded-xl bg-emerald-500 text-gray-950 transition';
+                    if (tab === 'server') fetchServerStatus();
+                }}
+
+                async function fetchServerStatus() {{
+                    try {{
+                        const res = await fetch('/api/server-status');
+                        const data = await res.json();
+                        document.getElementById('srv-cpu').innerText = data.cpu_usage + '%';
+                        document.getElementById('srv-cpu-bar').style.width = data.cpu_usage + '%';
+                        document.getElementById('srv-ram').innerText = data.ram_used + ' / ' + data.ram_total + ' GB';
+                        document.getElementById('srv-ram-bar').style.width = data.ram_percent + '%';
+                    }} catch(e) {{}}
+                }}
+
+                async function checkTikTokUrl() {{
+                    const url = document.getElementById('check-url-input').value.trim();
+                    const resBox = document.getElementById('check-result-box');
+                    if (!url) return;
+
+                    const resp = await fetch('/api/tiktok/check', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{ url: url }})
+                    }});
+                    const data = await resp.json();
+                    
+                    resBox.classList.remove('hidden', 'bg-red-500/10', 'border-red-500/30', 'text-red-400', 'bg-emerald-500/10', 'border-emerald-500/30', 'text-emerald-400');
+                    if (data.exists) {{
+                        resBox.classList.add('bg-red-500/10', 'border-red-500/30', 'text-red-400');
+                        resBox.innerText = data.message;
+                    }} else {{
+                        resBox.classList.add('bg-emerald-500/10', 'border-emerald-500/30', 'text-emerald-400');
+                        resBox.innerText = data.message;
+                    }}
+                }}
+
                 function allowDrop(ev) {{ ev.preventDefault(); ev.currentTarget.classList.add('border-emerald-500/50', 'bg-emerald-500/5'); }}
                 function leaveDrop(ev) {{ ev.currentTarget.classList.remove('border-emerald-500/50', 'bg-emerald-500/5'); }}
                 function drag(ev, botId) {{ ev.dataTransfer.setData("botId", botId); }}
@@ -494,6 +713,10 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None))
                 function closeModal() {{ document.getElementById('addModal').classList.add('hidden'); document.getElementById('addModal').classList.remove('flex'); }}
                 function openGroupModal() {{ document.getElementById('groupModal').classList.remove('hidden'); document.getElementById('groupModal').classList.add('flex'); }}
                 function closeGroupModal() {{ document.getElementById('groupModal').classList.add('hidden'); document.getElementById('groupModal').classList.remove('flex'); }}
+
+                // Автоматическое переключение вкладки при редиректе
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('tab') === 'tiktok') switchTab('tiktok');
             </script>
         </div>
     </body>
@@ -614,12 +837,6 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{bot['name']}</title>
         <script src="https://cdn.tailwindcss.com"></script>
-        <style>
-            .code-editor::-webkit-scrollbar {{ width: 8px; height: 8px; }}
-            .code-editor::-webkit-scrollbar-track {{ background: #030712; border-radius: 8px; }}
-            .code-editor::-webkit-scrollbar-thumb {{ background: #1f2937; border-radius: 8px; border: 2px solid #030712; }}
-            .code-editor::-webkit-scrollbar-thumb:hover {{ background: #10b981; }}
-        </style>
     </head>
     <body class="bg-gray-950 text-gray-100 min-h-screen p-4 pb-10">
         <div class="max-w-md mx-auto">
@@ -629,191 +846,40 @@ async def bot_detail(bot_id: int, gogoha_strict_session: str = Cookie(None)):
                 <span class="text-xs text-gray-500">{bot['group_name']}</span>
             </div>
 
-            <!-- ШАПКА: ЛИЧНЫЙ АККАУНТ + ПОДКЛЮЧЕННЫЙ TELEGRAM БОТ -->
             <div class="bg-gradient-to-r from-emerald-950/40 to-gray-900 border border-emerald-500/20 rounded-2xl p-4 mb-4 shadow-xl">
                 <div class="flex items-center justify-between mb-3">
                     <span class="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">👥 Telegram Аккаунт & Бот</span>
-                    <button onclick="toggleEditOwner()" class="text-[10px] text-emerald-400 hover:underline">Изменить фото</button>
                 </div>
-                
                 <div id="owner-display" class="flex items-center gap-3 mb-3 pb-3 border-b border-gray-800">
                     <img src="{bot['owner_avatar']}" class="w-12 h-12 rounded-full border-2 border-emerald-500/40 object-cover shadow-md">
                     <div>
-                        <div class="flex items-center gap-2">
-                            <h2 class="text-sm font-bold text-white">{bot['owner_name']}</h2>
-                            <span class="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20">Владелец</span>
-                        </div>
-                        <p class="text-xs text-emerald-400 font-mono mt-0.5">{bot['owner_username']}</p>
+                        <div class="text-xs font-bold text-white">{bot['owner_name']}</div>
+                        <div class="text-[10px] text-emerald-400 font-mono">{bot['owner_username']}</div>
                     </div>
                 </div>
-
-                <div class="flex items-center justify-between text-xs bg-gray-950/80 p-2.5 rounded-xl border border-gray-800/80">
-                    <div class="flex items-center gap-2.5">
-                        <span class="text-lg">🤖</span>
-                        <div>
-                            <div class="text-white font-bold text-xs">{bot_api_info['name']}</div>
-                            <div class="text-[11px] text-emerald-400 font-mono">{bot_api_info['username']}</div>
-                        </div>
-                    </div>
-                    <span class="text-[10px] text-gray-400 font-mono bg-gray-900 px-2 py-1 rounded-lg border border-gray-800">Token: {bot['token'][:8]}...</span>
-                </div>
-
-                <form id="owner-form" action="/update-owner/{bot_id}" method="POST" enctype="multipart/form-data" class="hidden space-y-3 mt-3 pt-3 border-t border-gray-800">
-                    <input type="text" name="owner_name" value="{bot['owner_name']}" placeholder="Имя аккаунта" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-white">
-                    <input type="text" name="owner_username" value="{bot['owner_username']}" placeholder="@username аккаунта" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-white">
-                    <input type="file" name="avatar_file" accept="image/*" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-gray-300">
-                    <div class="flex gap-2">
-                        <button type="submit" class="bg-emerald-500 text-gray-950 font-bold px-3 py-1.5 rounded-lg text-xs">Сохранить</button>
-                        <button type="button" onclick="toggleEditOwner()" class="bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg text-xs">Отмена</button>
-                    </div>
-                </form>
             </div>
 
-            <div class="grid grid-cols-4 gap-1 bg-gray-900 p-1 rounded-2xl mb-4 border border-gray-800">
-                <button onclick="switchTab('users')" id="btn-users" class="py-2 px-1 rounded-xl text-[10px] font-semibold bg-emerald-500 text-gray-950 font-bold transition text-center">👤 Юзеры</button>
-                <button onclick="switchTab('logs')" id="btn-logs" class="py-2 px-1 rounded-xl text-[10px] font-semibold text-gray-400 transition text-center">📊 Логи</button>
-                <button onclick="switchTab('stats')" id="btn-stats" class="py-2 px-1 rounded-xl text-[10px] font-semibold text-gray-400 transition text-center">📈 Дни</button>
-                <button onclick="switchTab('code')" id="btn-code" class="py-2 px-1 rounded-xl text-[10px] font-semibold text-gray-400 transition text-center">💻 Код</button>
+            <div class="mb-4">
+                <h3 class="text-xs font-bold text-gray-300 mb-2">📊 Статистика за 7 дней</h3>
+                {daily_stats_html}
             </div>
 
-            <div id="tab-users" class="space-y-2">{users_html}</div>
-            <div id="tab-logs" class="hidden space-y-2">{logs_html}</div>
-            <div id="tab-stats" class="hidden space-y-2">{daily_stats_html}</div>
-
-            <div id="tab-code" class="hidden space-y-3">
-                <form id="code-form" action="/save-code/{bot_id}" method="POST" onsubmit="return confirmSaveCode()" class="space-y-3">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="text-xs text-gray-400"># Полный код бота</span>
-                        <div class="flex gap-2">
-                            <button type="button" onclick="cancelCodeEdit()" id="btn-cancel-code" class="hidden text-xs text-red-400 border border-red-500/30 px-2 py-1 rounded-lg bg-red-500/10">❌ Отмена</button>
-                            <button type="button" onclick="enableCodeEdit()" id="btn-edit-code" class="text-xs text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded-lg bg-emerald-500/10">✏️ Изменить код</button>
-                        </div>
-                    </div>
-                    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-2 shadow-lg">
-                        <textarea id="code-area" readonly name="code_content" class="code-editor w-full h-[420px] bg-gray-950 border border-gray-800/80 rounded-xl p-3 text-xs font-mono text-emerald-400 focus:outline-none leading-relaxed resize-y whitespace-pre overflow-auto">{bot['code_content']}</textarea>
-                    </div>
-                    <button type="submit" id="btn-save-code" class="hidden w-full bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold py-3 rounded-xl text-sm shadow-lg shadow-emerald-500/20 transition">💾 Сохранить и обновить код</button>
-                </form>
+            <div class="mb-4">
+                <h3 class="text-xs font-bold text-gray-300 mb-2">👤 Обработанные пользователи</h3>
+                {users_html}
             </div>
 
-            <script>
-                const originalCodeContent = `{bot['code_content']}`;
-
-                function enableCodeEdit() {{
-                    if (confirm("Вы уверены, что хотите перейти в режим редактирования кода?")) {{
-                        const area = document.getElementById('code-area');
-                        area.removeAttribute('readonly');
-                        area.focus();
-                        document.getElementById('btn-edit-code').classList.add('hidden');
-                        document.getElementById('btn-cancel-code').classList.remove('hidden');
-                        document.getElementById('btn-save-code').classList.remove('hidden');
-                    }}
-                }}
-
-                function cancelCodeEdit() {{
-                    const area = document.getElementById('code-area');
-                    area.value = originalCodeContent;
-                    area.setAttribute('readonly', 'true');
-                    document.getElementById('btn-edit-code').classList.remove('hidden');
-                    document.getElementById('btn-cancel-code').classList.add('hidden');
-                    document.getElementById('btn-save-code').classList.add('hidden');
-                }}
-
-                function confirmSaveCode() {{
-                    return confirm("Вы уверены, что хотите сохранить изменения и обновить код бота?");
-                }}
-
-                function toggleEditOwner() {{
-                    document.getElementById('owner-display').classList.toggle('hidden');
-                    document.getElementById('owner-form').classList.toggle('hidden');
-                }}
-
-                function switchTab(tab) {{
-                    if (tab !== 'code') {{
-                        cancelCodeEdit();
-                    }}
-
-                    ['users', 'logs', 'stats', 'code'].forEach(t => {{
-                        document.getElementById('tab-' + t).classList.add('hidden');
-                        document.getElementById('btn-' + t).className = 'py-2 px-1 rounded-xl text-[10px] font-semibold text-gray-400 transition text-center';
-                    }});
-                    document.getElementById('tab-' + tab).classList.remove('hidden');
-                    document.getElementById('btn-' + tab).className = 'py-2 px-1 rounded-xl text-[10px] font-semibold bg-emerald-500 text-gray-950 font-bold transition text-center';
-                }}
-            </script>
+            <div>
+                <h3 class="text-xs font-bold text-gray-300 mb-2">📜 Логи действий</h3>
+                {logs_html}
+            </div>
         </div>
     </body>
     </html>
     """
     return HTMLResponse(content=html_content)
 
-@app.post("/move-to-group")
-async def move_to_group(bot_id: int = Form(...), target_group: str = Form(...), gogoha_strict_session: str = Cookie(None)):
-    if gogoha_strict_session != "active_valid_session":
-        return RedirectResponse(url="/login", status_code=303)
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE bots SET group_name = ? WHERE id = ?", (target_group, bot_id))
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url="/", status_code=303)
-
-@app.post("/add-bot")
-async def add_bot(name: str = Form(...), token: str = Form(...), group_name: str = Form(...), gogoha_strict_session: str = Cookie(None)):
-    if gogoha_strict_session != "active_valid_session":
-        return RedirectResponse(url="/login", status_code=303)
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("INSERT INTO bots (name, token, group_name, code_content, owner_username, owner_name) VALUES (?, ?, ?, ?, ?, ?)", 
-                       (name, token.strip(), group_name.strip(), "", '@new_acc', 'New Manager'))
-        conn.commit()
-    except Exception: pass
-    conn.close()
-    return RedirectResponse(url="/", status_code=303)
-
-@app.post("/add-group")
-async def add_group(group_name: str = Form(...), gogoha_strict_session: str = Cookie(None)):
-    if gogoha_strict_session != "active_valid_session":
-        return RedirectResponse(url="/login", status_code=303)
-    return RedirectResponse(url="/", status_code=303)
-
-@app.post("/update-owner/{bot_id}")
-async def update_owner(bot_id: int, owner_name: str = Form(...), owner_username: str = Form(...), avatar_file: UploadFile = File(None), gogoha_strict_session: str = Cookie(None)):
-    if gogoha_strict_session != "active_valid_session":
-        return RedirectResponse(url="/login", status_code=303)
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    avatar_url = None
-    if avatar_file and avatar_file.filename:
-        file_ext = avatar_file.filename.split(".")[-1]
-        file_name = f"avatar_{bot_id}_{int(datetime.now().timestamp())}.{file_ext}"
-        file_path = os.path.join("static/avatars", file_name)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(avatar_file.file, buffer)
-        avatar_url = f"/static/avatars/{file_name}"
-
-    if avatar_url:
-        cursor.execute("UPDATE bots SET owner_name = ?, owner_username = ?, owner_avatar = ? WHERE id = ?", (owner_name.strip(), owner_username.strip(), avatar_url, bot_id))
-    else:
-        cursor.execute("UPDATE bots SET owner_name = ?, owner_username = ? WHERE id = ?", (owner_name.strip(), owner_username.strip(), bot_id))
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url=f"/bot/{bot_id}", status_code=303)
-
-@app.post("/save-code/{bot_id}")
-async def save_code(bot_id: int, code_content: str = Form(...), gogoha_strict_session: str = Cookie(None)):
-    if gogoha_strict_session != "active_valid_session":
-        return RedirectResponse(url="/login", status_code=303)
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE bots SET code_content = ? WHERE id = ?", (code_content, bot_id))
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url=f"/bot/{bot_id}", status_code=303)
-
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run("dashboard:app", host="0.0.0.0", port=port)
