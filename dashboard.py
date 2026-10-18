@@ -242,7 +242,10 @@ async def server_status():
 @app.post("/api/tiktok/add")
 async def add_tiktok_link(url: str = Form(...)):
     url = url.strip()
-    if not url: return RedirectResponse(url="/?tab=tiktok&msg=empty", status_code=303)
+    if not url:
+        return RedirectResponse(url="/?tab=tiktok&msg=empty", status_code=303)
+    if "tiktok.com" not in url.lower():
+        return RedirectResponse(url="/?tab=tiktok&msg=invalid_domain", status_code=303)
     try:
         conn = get_db()
         conn.execute("INSERT INTO tiktok_links (url) VALUES (?)", (url,))
@@ -251,6 +254,28 @@ async def add_tiktok_link(url: str = Form(...)):
         return RedirectResponse(url="/?tab=tiktok&msg=added", status_code=303)
     except sqlite3.IntegrityError:
         return RedirectResponse(url="/?tab=tiktok&msg=exists", status_code=303)
+
+@app.post("/api/tiktok/check")
+async def check_tiktok_link(data: dict):
+    url = data.get("url", "").strip()
+    if not url:
+        return {"exists": False, "message": "Введите ссылку"}
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM tiktok_links WHERE url = ?", (url,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {"exists": True, "message": "❌ Данная ссылка уже обрабатывалась!"}
+    return {"exists": False, "message": "✅ Ссылки нет в базе (можно использовать)"}
+
+@app.post("/api/tiktok/delete")
+async def delete_tiktok_link(link_id: int = Form(...)):
+    conn = get_db()
+    conn.execute("DELETE FROM tiktok_links WHERE id = ?", (link_id,))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/?tab=tiktok&msg=deleted", status_code=303)
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(response: Response, error: str = None):
@@ -306,7 +331,7 @@ async def logout():
     return response
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None), filter_target: str = "all"):
+async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None), filter_target: str = "all", tab: str = "bots", msg: str = None):
     if gogoha_strict_session != "active_valid_session":
         return RedirectResponse(url="/login", status_code=303)
 
@@ -410,16 +435,33 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
 
     tiktok_rows_html = ""
     for link in tiktok_links:
+        l_id = link['id']
         l_url = link['url']
         l_date = link['created_at']
         tiktok_rows_html += f"""
         <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 mb-2 flex justify-between items-center text-xs">
-            <span class="text-emerald-400 font-mono truncate max-w-[240px]">{l_url}</span>
-            <span class="text-[10px] text-gray-500">{l_date}</span>
+            <span class="text-emerald-400 font-mono truncate max-w-[210px]">{l_url}</span>
+            <div class="flex items-center gap-2">
+                <span class="text-[10px] text-gray-500">{l_date}</span>
+                <form action="/api/tiktok/delete" method="POST" class="inline">
+                    <input type="hidden" name="link_id" value="{l_id}">
+                    <button type="submit" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-2 py-1 rounded-lg text-[10px] border border-red-500/20 font-bold">🗑️ Удалить</button>
+                </form>
+            </div>
         </div>
         """
     if not tiktok_links:
         tiktok_rows_html = '<div class="text-center py-6 text-xs text-gray-500">Список ссылок пуст</div>'
+
+    msg_box = ""
+    if msg == "added":
+        msg_box = '<div class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-2.5 rounded-xl text-xs text-center mb-3 font-bold">✅ Ссылка успешно добавлена!</div>'
+    elif msg == "exists":
+        msg_box = '<div class="bg-red-500/10 border border-red-500/30 text-red-400 p-2.5 rounded-xl text-xs text-center mb-3 font-bold">❌ Данная ссылка уже обрабатывалась!</div>'
+    elif msg == "invalid_domain":
+        msg_box = '<div class="bg-amber-500/10 border border-amber-500/30 text-amber-400 p-2.5 rounded-xl text-xs text-center mb-3 font-bold">⚠️ Введите только прямую ссылку TikTok!</div>'
+    elif msg == "deleted":
+        msg_box = '<div class="bg-gray-800 text-gray-300 p-2.5 rounded-xl text-xs text-center mb-3 font-bold">🗑️ Ссылка удалена</div>'
 
     html_content = f"""
     <!DOCTYPE html>
@@ -450,7 +492,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
                 <button onclick="switchTab('tiktok')" id="tab-btn-tiktok" class="flex-1 py-2 text-center text-xs font-semibold text-gray-400 hover:text-white transition">🎵 Тик Ток</button>
             </div>
 
-            <div id="section-bots">
+            <div id="section-bots" class="{'hidden' if tab != 'bots' else ''}">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-3 mb-4 shadow-xl">
                     <label class="block text-[11px] text-gray-400 mb-1">🔍 Выбрать источник для статистики:</label>
                     <select onchange="changeFilter(this.value)" class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-emerald-400 font-semibold focus:border-emerald-500">
@@ -484,7 +526,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
                 {groups_html}
             </div>
 
-            <div id="section-server" class="hidden">
+            <div id="section-server" class="{'hidden' if tab != 'server' else ''}">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-4 shadow-xl">
                     <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-800">
                         <div>
@@ -518,14 +560,25 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
                 </div>
             </div>
 
-            <div id="section-tiktok" class="hidden">
+            <div id="section-tiktok" class="{'hidden' if tab != 'tiktok' else ''}">
+                {msg_box}
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
                     <h3 class="text-xs font-bold text-white mb-3">➕ Добавить ссылку TikTok</h3>
                     <form action="/api/tiktok/add" method="POST" class="flex gap-2">
                         <input type="text" name="url" required placeholder="https://www.tiktok.com/@..." class="flex-grow bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500">
-                        <button type="submit" class="bg-emerald-500 text-gray-950 font-bold px-4 py-2.5 rounded-xl text-xs">Добавить</button>
+                        <button type="submit" class="bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold px-4 py-2.5 rounded-xl text-xs">Добавить</button>
                     </form>
                 </div>
+
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
+                    <h3 class="text-xs font-bold text-white mb-3">🔍 Проверка ссылки на обработку</h3>
+                    <div class="space-y-2">
+                        <input type="text" id="check-url-input" placeholder="Вставьте ссылку TikTok..." class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500">
+                        <button type="button" onclick="checkTikTokUrl()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg">Проверить</button>
+                        <div id="check-result-box" class="hidden p-3 rounded-xl border text-xs text-center font-bold"></div>
+                    </div>
+                </div>
+
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
                     <h3 class="text-xs font-bold text-gray-300 mb-3">📋 Сохраненные ссылки в базе</h3>
                     {tiktok_rows_html}
@@ -559,7 +612,28 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
                 }}
 
                 function changeFilter(val) {{
-                    window.location.href = "/?filter_target=" + val;
+                    window.location.href = "/?filter_target=" + val + "&tab=bots";
+                }}
+
+                async function checkTikTokUrl() {{
+                    const url = document.getElementById('check-url-input').value.trim();
+                    const box = document.getElementById('check-result-box');
+                    if (!url) return;
+                    try {{
+                        const res = await fetch('/api/tiktok/check', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/json' }},
+                            body: JSON.stringify({{ url: url }})
+                        }});
+                        const data = await res.json();
+                        box.classList.remove('hidden', 'bg-red-500/10', 'border-red-500/30', 'text-red-400', 'bg-emerald-500/10', 'border-emerald-500/30', 'text-emerald-400');
+                        if (data.exists) {{
+                            box.classList.add('bg-red-500/10', 'border-red-500/30', 'text-red-400');
+                        }} else {{
+                            box.classList.add('bg-emerald-500/10', 'border-emerald-500/30', 'text-emerald-400');
+                        }}
+                        box.innerText = data.message;
+                    }} catch (e) {{}}
                 }}
 
                 async function fetchServerStatus() {{
@@ -575,6 +649,11 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
 
                 function openModal() {{ document.getElementById('addModal').classList.remove('hidden'); document.getElementById('addModal').classList.add('flex'); }}
                 function closeModal() {{ document.getElementById('addModal').classList.add('hidden'); document.getElementById('addModal').classList.remove('flex'); }}
+
+                // Автоматическое переключение вкладки, если передана в URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const activeTab = urlParams.get('tab');
+                if (activeTab) switchTab(activeTab);
 
                 const ctx = document.getElementById('trafficChart').getContext('2d');
                 new Chart(ctx, {{
@@ -628,20 +707,26 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
     logs_rows = ""
     for l in logs:
         l_username = l['lead_username'] or f"id_{l['lead_id']}"
-        l_status_code = l['status_code']
         l_status_text = l['status_text']
         l_updated_at = l['updated_at']
-        badge_color = "text-emerald-400 bg-emerald-500/10" if l['is_final_link'] else "text-amber-400 bg-amber-500/10"
+        
+        # Русские читаемые статусы
+        st_badge = '<span class="text-[10px] bg-amber-500/10 text-amber-400 font-bold px-2 py-0.5 rounded-lg border border-amber-500/20">В процессе</span>'
+        if l['is_final_link'] == 1 or "успешно" in l_status_text.lower():
+            st_badge = '<span class="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-lg border border-emerald-500/20">Ссылка отправлена</span>'
+        elif "отказ" in l_status_text.lower() or "игнор" in l_status_text.lower():
+            st_badge = '<span class="text-[10px] bg-red-500/10 text-red-400 font-bold px-2 py-0.5 rounded-lg border border-red-500/20">Отказ</span>'
+
         logs_rows += f"""
-        <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 mb-2 text-xs flex justify-between items-center">
-            <div>
-                <div class="font-bold text-white flex items-center gap-2">
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 mb-2 text-xs shadow-md">
+            <div class="flex justify-between items-center mb-1">
+                <div class="font-bold text-emerald-400 flex items-center gap-2">
                     <span>@{l_username}</span>
-                    <span class="text-[10px] px-2 py-0.5 rounded-lg {badge_color}">{l_status_code}</span>
+                    {st_badge}
                 </div>
-                <div class="text-gray-400 mt-0.5">{l_status_text}</div>
+                <div class="text-[11px] font-mono text-gray-400 font-medium">{l_updated_at}</div>
             </div>
-            <div class="text-[10px] text-gray-500">{l_updated_at}</div>
+            <div class="text-gray-300 text-[11px] mt-1">{l_status_text}</div>
         </div>
         """
     if not logs:
@@ -652,19 +737,21 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
         lead_uname = lead['lead_username'] or f"id_{lead['lead_id']}"
         lead_st_text = lead['status_text']
         lead_date = lead['updated_at']
-        st_badge = '<span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-lg">Ссылка отправлена</span>' if lead['is_final_link'] else '<span class="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-lg">В процессе / Ожидание</span>'
-        if "отказ" in lead_st_text.lower():
-            st_badge = '<span class="text-[10px] bg-red-500/10 text-red-400 px-2 py-0.5 rounded-lg">Отказ</span>'
+        st_badge = '<span class="text-[10px] bg-amber-500/10 text-amber-400 font-bold px-2 py-0.5 rounded-lg border border-amber-500/20">В процессе / Ожидание</span>'
+        if lead['is_final_link'] == 1:
+            st_badge = '<span class="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-lg border border-emerald-500/20">Ссылка отправлена</span>'
+        elif "отказ" in lead_st_text.lower():
+            st_badge = '<span class="text-[10px] bg-red-500/10 text-red-400 font-bold px-2 py-0.5 rounded-lg border border-red-500/20">Отказ</span>'
             
         leads_rows += f"""
-        <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 mb-2 flex justify-between items-center text-xs">
-            <div>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 mb-2 text-xs shadow-md">
+            <div class="flex justify-between items-center mb-1">
                 <div class="font-bold text-emerald-400">@{lead_uname}</div>
-                <div class="text-gray-400 text-[11px] mt-0.5">{lead_st_text}</div>
+                <div class="text-[11px] font-mono text-gray-400 font-medium">{lead_date}</div>
             </div>
-            <div class="text-right">
-                {st_badge}
-                <div class="text-[10px] text-gray-500 mt-1">{lead_date}</div>
+            <div class="flex justify-between items-center mt-1">
+                <div class="text-gray-300 text-[11px] truncate max-w-[200px]">{lead_st_text}</div>
+                <div>{st_badge}</div>
             </div>
         </div>
         """
@@ -688,8 +775,9 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                 <span class="text-xs text-gray-400">{bot_group}</span>
             </header>
 
-            <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
-                <div class="flex items-center gap-3 mb-3">
+            <!-- ШАПКА БОТА И КНОПКА РЕДАКТИРОВАНИЯ -->
+            <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl flex items-center justify-between">
+                <div class="flex items-center gap-3">
                     <img src="{avatar}" class="w-14 h-14 rounded-2xl object-cover border border-emerald-500/30">
                     <div>
                         <h3 class="font-bold text-white text-sm">{owner_name}</h3>
@@ -697,17 +785,37 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                         <p class="text-[10px] text-gray-500 font-mono mt-1 break-all">Token: {bot_token}</p>
                     </div>
                 </div>
+                <button onclick="openEditModal()" class="px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/30 flex items-center gap-1">
+                    ✏️ Изменить
+                </button>
             </div>
 
+            <!-- ВКЛАДКИ РАЗДЕЛОВ (ПЕРВАЯ В КЛАДКА - ЮЗЫ) -->
             <div class="flex bg-gray-900 border border-gray-800 rounded-2xl p-1 mb-4">
-                <button onclick="switchSubTab('settings')" id="subtab-btn-settings" class="flex-1 py-2 text-center text-xs font-bold rounded-xl bg-emerald-500 text-gray-950 transition">⚙️ Настройки</button>
+                <button onclick="switchSubTab('users')" id="subtab-btn-users" class="flex-1 py-2 text-center text-xs font-bold rounded-xl bg-emerald-500 text-gray-950 transition">👥 Юзы</button>
                 <button onclick="switchSubTab('logs')" id="subtab-btn-logs" class="flex-1 py-2 text-center text-xs font-semibold text-gray-400 hover:text-white transition">📜 Логи</button>
-                <button onclick="switchSubTab('users')" id="subtab-btn-users" class="flex-1 py-2 text-center text-xs font-semibold text-gray-400 hover:text-white transition">👥 Юзы</button>
             </div>
 
-            <div id="subtab-settings">
+            <!-- РАЗДЕЛ 1: ПОЛЬЗОВАТЕЛИ (ЮЗЫ) -->
+            <div id="subtab-users">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
-                    <h3 class="text-xs font-bold text-white mb-3">✏️ Редактировать бота и аватарку</h3>
+                    <h3 class="text-xs font-bold text-gray-300 mb-3">👥 Обработанные пользователи (Юзы)</h3>
+                    {leads_rows}
+                </div>
+            </div>
+
+            <!-- РАЗДЕЛ 2: ЛОГИ -->
+            <div id="subtab-logs" class="hidden">
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
+                    <h3 class="text-xs font-bold text-gray-300 mb-3">📜 Логи действий бота в реальном времени</h3>
+                    {logs_rows}
+                </div>
+            </div>
+
+            <!-- МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ БОТА И АВАТАРКИ -->
+            <div id="editModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+                <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+                    <h3 class="text-lg font-bold text-white mb-4">✏️ Редактировать бота</h3>
                     <form action="/bot/{bot_id}/update" method="POST" enctype="multipart/form-data" class="space-y-3">
                         <div>
                             <label class="block text-[11px] text-gray-400 mb-1">Название бота</label>
@@ -722,37 +830,29 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                             <input type="text" name="owner_username" value="{owner_username}" required class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500">
                         </div>
                         <div>
-                            <label class="block text-[11px] text-gray-400 mb-1">Аватарка аккаунта (выберите файл)</label>
+                            <label class="block text-[11px] text-gray-400 mb-1">Аватарка (выберите файл)</label>
                             <input type="file" name="avatar" accept="image/*" class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2 text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-500 file:text-gray-950 hover:file:bg-emerald-400">
                         </div>
-                        <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold py-2.5 rounded-xl text-xs shadow-lg mt-2">Сохранить изменения</button>
+                        <div class="flex gap-3 pt-2">
+                            <button type="button" onclick="closeEditModal()" class="w-1/2 bg-gray-800 text-gray-300 py-2.5 rounded-xl text-xs font-semibold">Отмена</button>
+                            <button type="submit" class="w-1/2 bg-emerald-500 text-gray-950 font-bold py-2.5 rounded-xl text-xs">Сохранить</button>
+                        </div>
                     </form>
-                </div>
-            </div>
-
-            <div id="subtab-logs" class="hidden">
-                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
-                    <h3 class="text-xs font-bold text-gray-300 mb-3">📜 Логи действий бота в реальном времени</h3>
-                    {logs_rows}
-                </div>
-            </div>
-
-            <div id="subtab-users" class="hidden">
-                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
-                    <h3 class="text-xs font-bold text-gray-300 mb-3">👥 Обработанные пользователи (Юзы)</h3>
-                    {leads_rows}
                 </div>
             </div>
 
             <script>
                 function switchSubTab(tab) {{
-                    ['settings', 'logs', 'users'].forEach(t => {{
+                    ['logs', 'users'].forEach(t => {{
                         document.getElementById('subtab-' + t).classList.add('hidden');
                         document.getElementById('subtab-btn-' + t).className = 'flex-1 py-2 text-center text-xs font-semibold text-gray-400 hover:text-white transition';
                     }});
                     document.getElementById('subtab-' + tab).classList.remove('hidden');
                     document.getElementById('subtab-btn-' + tab).className = 'flex-1 py-2 text-center text-xs font-bold rounded-xl bg-emerald-500 text-gray-950 transition';
                 }}
+
+                function openEditModal() {{ document.getElementById('editModal').classList.remove('hidden'); document.getElementById('editModal').classList.add('flex'); }}
+                function closeEditModal() {{ document.getElementById('editModal').classList.add('hidden'); document.getElementById('editModal').classList.remove('flex'); }}
             </script>
         </div>
     </body>
