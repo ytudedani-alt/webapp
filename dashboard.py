@@ -306,7 +306,7 @@ async def logout():
     return response
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None), filter_target: str = "all"):
+async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None), filter: str = "all"):
     if gogoha_strict_session != "active_valid_session":
         return RedirectResponse(url="/login", status_code=303)
 
@@ -315,13 +315,12 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
     cursor.execute("SELECT id, name, token, group_name, owner_username, owner_name, owner_avatar FROM bots")
     bots = cursor.fetchall()
     
-    # Фильтрация статистики по боту или папке
     today_str = datetime.now().strftime("%Y-%m-%d")
-    if filter_target.startswith("bot_"):
-        b_id = filter_target.split("_")[1]
+    if filter.startswith("bot_"):
+        b_id = filter.split("_")[1]
         cursor.execute("SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE bot_id = ? AND date(updated_at) = ?", (b_id, today_str))
-    elif filter_target.startswith("group_"):
-        g_name = filter_target.split("_")[1]
+    elif filter.startswith("group_"):
+        g_name = filter.split("_")[1]
         cursor.execute("""
             SELECT COUNT(DISTINCT l.lead_id), COALESCE(SUM(l.is_final_link), 0) 
             FROM bot_logs l JOIN bots b ON l.bot_id = b.id 
@@ -339,9 +338,9 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
         d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         chart_labels.append((datetime.now() - timedelta(days=i)).strftime("%d.%m"))
         
-        if filter_target.startswith("bot_"):
+        if filter.startswith("bot_"):
             cursor.execute("SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE bot_id = ? AND date(updated_at) = ?", (b_id, d))
-        elif filter_target.startswith("group_"):
+        elif filter.startswith("group_"):
             cursor.execute("""
                 SELECT COUNT(DISTINCT l.lead_id), COALESCE(SUM(l.is_final_link), 0) 
                 FROM bot_logs l JOIN bots b ON l.bot_id = b.id 
@@ -364,12 +363,11 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
         if group not in groups: groups[group] = []
         groups[group].append(bot)
 
-    # Формирование выпадающего списка фильтрации
-    filter_options = '<option value="all" ' + ('selected' if filter_target=='all' else '') + '>🌐 Вся система (Все боты)</option>'
+    filter_options = '<option value="all" ' + ('selected' if filter=='all' else '') + '>🌐 Вся система (Все боты)</option>'
     for g_name in groups.keys():
-        filter_options += f'<option value="group_{g_name}" ' + ('selected' if filter_target==f'group_{g_name}' else '') + f'>📁 Папка: {g_name}</option>'
+        filter_options += f'<option value="group_{g_name}" ' + ('selected' if filter==f'group_{g_name}' else '') + f'>📁 Папка: {g_name}</option>'
     for bot in bots:
-        filter_options += f'<option value="bot_{bot["id"]}" ' + ('selected' if filter_target==f'bot_{bot["id"]}' else '') + f'>🤖 Бот: {bot["name"]}</option>'
+        filter_options += f'<option value="bot_{bot["id"]}" ' + ('selected' if filter==f'bot_{bot["id"]}' else '') + f'>🤖 Бот: {bot["name"]}</option>'
 
     groups_html = ""
     for group_name, g_bots in groups.items():
@@ -439,16 +437,13 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
                 </div>
             </header>
 
-            <!-- НАВИГАЦИОННЫЕ ВКЛАДКИ -->
             <div class="flex bg-gray-900 border border-gray-800 rounded-2xl p-1 mb-4">
                 <button onclick="switchTab('bots')" id="tab-btn-bots" class="flex-1 py-2 text-center text-xs font-bold rounded-xl bg-emerald-500 text-gray-950 transition">🤖 Боты</button>
                 <button onclick="switchTab('server')" id="tab-btn-server" class="flex-1 py-2 text-center text-xs font-semibold text-gray-400 hover:text-white transition">🖥️ Сервер</button>
                 <button onclick="switchTab('tiktok')" id="tab-btn-tiktok" class="flex-1 py-2 text-center text-xs font-semibold text-gray-400 hover:text-white transition">🎵 Тик Ток</button>
             </div>
 
-            <!-- СЕКЦИЯ 1: БОТЫ И СТАТИСТИКА -->
             <div id="section-bots">
-                <!-- ФИЛЬТР СТАТИСТИКИ -->
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-3 mb-4 shadow-xl">
                     <label class="block text-[11px] text-gray-400 mb-1">🔍 Выбрать источник для статистики:</label>
                     <select onchange="changeFilter(this.value)" class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-emerald-400 font-semibold focus:border-emerald-500">
@@ -482,7 +477,6 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
                 {groups_html}
             </div>
 
-            <!-- СЕКЦИЯ 2: СЕРВЕР -->
             <div id="section-server" class="hidden">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-4 shadow-xl">
                     <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-800">
@@ -517,7 +511,6 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
                 </div>
             </div>
 
-            <!-- СЕКЦИЯ 3: ТИК ТОК ПАРСЕР -->
             <div id="section-tiktok" class="hidden">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
                     <h3 class="text-xs font-bold text-white mb-3">➕ Добавить ссылку TikTok</h3>
@@ -532,7 +525,6 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
                 </div>
             </div>
 
-            <!-- МОДАЛЬНОЕ ОКНО ДОБАВЛЕНИЯ БОТА -->
             <div id="addModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
                 <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
                     <h3 class="text-lg font-bold text-white mb-4">➕ Добавить бота</h3>
@@ -609,11 +601,9 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
         conn.close()
         return RedirectResponse(url="/", status_code=303)
 
-    # Логи бота
     cursor.execute("SELECT * FROM bot_logs WHERE bot_id = ? ORDER BY updated_at DESC LIMIT 50", (bot_id,))
     logs = cursor.fetchall()
 
-    # Уникальные лиды (юзы)
     cursor.execute("""
         SELECT lead_id, lead_username, status_text, timer_sec, is_final_link, status_code, max(updated_at) as updated_at 
         FROM bot_logs WHERE bot_id = ? GROUP BY lead_id ORDER BY updated_at DESC
@@ -679,7 +669,6 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                 <span class="text-xs text-gray-400">{bot['group_name']}</span>
             </header>
 
-            <!-- КАРТОЧКА АККАУНТА И ТОКЕНА -->
             <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
                 <div class="flex items-center gap-3 mb-3">
                     <img src="{avatar}" class="w-14 h-14 rounded-2xl object-cover border border-emerald-500/30">
@@ -691,14 +680,12 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                 </div>
             </div>
 
-            <!-- ВКЛАДКИ РАЗДЕЛОВ -->
             <div class="flex bg-gray-900 border border-gray-800 rounded-2xl p-1 mb-4">
                 <button onclick="switchSubTab('settings')" id="subtab-btn-settings" class="flex-1 py-2 text-center text-xs font-bold rounded-xl bg-emerald-500 text-gray-950 transition">⚙️ Настройки</button>
                 <button onclick="switchSubTab('logs')" id="subtab-btn-logs" class="flex-1 py-2 text-center text-xs font-semibold text-gray-400 hover:text-white transition">📜 Логи</button>
                 <button onclick="switchSubTab('users')" id="subtab-btn-users" class="flex-1 py-2 text-center text-xs font-semibold text-gray-400 hover:text-white transition">👥 Юзы</button>
             </div>
 
-            <!-- РАЗДЕЛ 1: НАСТРОЙКИ И АВАТАРКА -->
             <div id="subtab-settings">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
                     <h3 class="text-xs font-bold text-white mb-3">✏️ Редактировать бота и аватарку</h3>
@@ -724,7 +711,6 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                 </div>
             </div>
 
-            <!-- РАЗДЕЛ 2: ЛОГИ -->
             <div id="subtab-logs" class="hidden">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
                     <h3 class="text-xs font-bold text-gray-300 mb-3">📜 Логи действий бота в реальном времени</h3>
@@ -732,7 +718,6 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                 </div>
             </div>
 
-            <!-- РАЗДЕЛ 3: ПОЛЬЗОВАТЕЛИ (ЮЗЫ) -->
             <div id="subtab-users" class="hidden">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
                     <h3 class="text-xs font-bold text-gray-300 mb-3">👥 Обработанные пользователи (Юзы)</h3>
@@ -765,10 +750,6 @@ async def update_bot_profile(bot_id: int, name: str = Form(...), owner_name: str
     if avatar and avatar.filename:
         os.makedirs("static/avatars", exist_ok=True)
         filename = f"bot_{bot_id}_{avatar.filename}"
-        avatar_path = f"/static/avatars/{filename}"
-        with open(f"static/{filename}", "buffer" if hasattr(shutil, "buffer") else "wb") as buffer:
-            shutil.copyfileobj(avatar.file, buffer)
-        # Уточненный путь для статики
         real_path = f"static/avatars/{filename}"
         with open(real_path, "wb") as buffer:
             shutil.copyfileobj(avatar.file, buffer)
