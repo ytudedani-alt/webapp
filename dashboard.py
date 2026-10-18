@@ -501,18 +501,18 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
         conn.close()
         return RedirectResponse(url="/", status_code=303)
 
-    # Логи действий бота (чистые логи)
+    # Логи действий бота
     cursor.execute("SELECT * FROM bot_logs WHERE bot_id = ? ORDER BY updated_at DESC LIMIT 50", (bot_id,))
     logs = cursor.fetchall()
 
-    # Уникальные лиды для вкладки Юзы
+    # Уникальные лиды для Юзов
     cursor.execute("""
         SELECT lead_id, lead_username, status_text, timer_sec, is_final_link, status_code, max(updated_at) as updated_at 
         FROM bot_logs WHERE bot_id = ? GROUP BY lead_id ORDER BY updated_at DESC
     """, (bot_id,))
     leads = cursor.fetchall()
 
-    # Личная статистика бота по дням (для 4 раздела)
+    # Личная статистика бота по дням
     cursor.execute("""
         SELECT date(updated_at) as d, COUNT(DISTINCT lead_id) as cnt, COALESCE(SUM(is_final_link), 0) as links
         FROM bot_logs WHERE bot_id = ? GROUP BY date(updated_at) ORDER BY d DESC LIMIT 7
@@ -527,7 +527,7 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
     bot_token = bot['token']
     avatar = bot['owner_avatar'] if bot['owner_avatar'] else '/static/avatars/default.png'
 
-    # Раздел 2: Логи (только действия)
+    # Раздел 2: Логи
     logs_rows = ""
     for l in logs:
         l_username = l['lead_username'] or f"id_{l['lead_id']}"
@@ -567,7 +567,7 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
     if not leads:
         leads_rows = '<div class="text-center py-6 text-xs text-gray-500">Нет пользователей</div>'
 
-    # Раздел 3: Очередь и таймеры (ожидание ссылки, ожидание первого вопроса, отказы)
+    # Раздел 3: Очередь (фильтруем строго ожидание отправки ссылки, ожидание 1 вопроса и отказы)
     queue_waiting, queue_first, queue_refusal = "", "", ""
     for lead in leads:
         lead_uname = lead['lead_username'] or f"id_{lead['lead_id']}"
@@ -577,7 +577,7 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
         <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 mb-2 text-xs shadow-md flex justify-between items-center">
             <div>
                 <span class="font-bold text-emerald-400">@{lead_uname}</span>
-                <div class="text-gray-400 text-[11px] mt-0.5">{lead['status_text']}</div>
+                <div class="text-gray-300 text-[11px] mt-0.5">{lead['status_text']}</div>
             </div>
             <span class="text-[10px] text-gray-400 font-mono">{lead['updated_at']}</span>
         </div>"""
@@ -586,12 +586,12 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
             continue
         elif "отказ" in st_text or "игнор" in st_text:
             queue_refusal += card
-        elif "ссылк" in st_text or lead['timer_sec'] > 0:
+        elif "ссылк" in st_text or "ожидание" in st_text and ("ч." in st_text or "мин" in st_text or "сек" in st_text or lead['timer_sec'] > 0):
             queue_waiting += card
         else:
             queue_first += card
 
-    # Раздел 4: Личная статистика по дням
+    # Раздел 4: Статистика по дням
     stats_rows = ""
     for row in bot_stats_days:
         stats_rows += f"""
@@ -621,7 +621,7 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                 <span class="text-xs text-gray-400">{bot_group}</span>
             </header>
 
-            <!-- ШАПКА С КОМПАКТНОЙ КНОПКОЙ ИЗМЕНИТЬ -->
+            <!-- ШАПКА -->
             <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl flex items-center justify-between">
                 <div class="flex items-center gap-3">
                     <img src="{avatar}" class="w-12 h-12 rounded-xl object-cover border border-emerald-500/30">
@@ -635,7 +635,7 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                 </button>
             </div>
 
-            <!-- 4 ВКЛАДКИ -->
+            <!-- 4 ОСНОВНЫЕ ВКЛАДКИ -->
             <div class="flex bg-gray-900 border border-gray-800 rounded-2xl p-1 mb-4 gap-1">
                 <button onclick="switchSubTab('users')" id="subtab-btn-users" class="flex-1 py-2 text-center text-xs font-bold rounded-xl bg-emerald-500 text-gray-950">👥 Юзы</button>
                 <button onclick="switchSubTab('logs')" id="subtab-btn-logs" class="flex-1 py-2 text-center text-xs font-semibold text-gray-400">📜 Логи</button>
@@ -659,23 +659,31 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                 </div>
             </div>
 
-            <!-- 3. ОЧЕРЕДЬ И ТАЙМЕРЫ -->
+            <!-- 3. ОЧЕРЕДЬ (С МИНИ-ПОДВКЛАДКАМИ) -->
             <div id="subtab-queue" class="hidden space-y-4">
-                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
+                <div class="flex bg-gray-900 border border-gray-800 rounded-xl p-1 gap-1">
+                    <button onclick="switchQueueTab('waiting')" id="qbtn-waiting" class="flex-1 py-1.5 text-center text-[11px] font-bold rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">⏳ Ожидание ссылки</button>
+                    <button onclick="switchQueueTab('first')" id="qbtn-first" class="flex-1 py-1.5 text-center text-[11px] font-semibold rounded-lg text-gray-400 hover:text-white">💬 1-й вопрос</button>
+                    <button onclick="switchQueueTab('refusal')" id="qbtn-refusal" class="flex-1 py-1.5 text-center text-[11px] font-semibold rounded-lg text-gray-400 hover:text-white">❌ Отказы</button>
+                </div>
+
+                <div id="qsec-waiting" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
                     <h3 class="text-xs font-bold text-amber-400 mb-2">⏳ Ожидают отправки ссылки</h3>
-                    {queue_waiting if queue_waiting else '<div class="text-xs text-gray-500 py-2">Нет лидов</div>'}
+                    {queue_waiting if queue_waiting else '<div class="text-xs text-gray-500 py-4 text-center">Нет лидов в ожидании ссылки</div>'}
                 </div>
-                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
+
+                <div id="qsec-first" class="hidden bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
                     <h3 class="text-xs font-bold text-blue-400 mb-2">💬 Ждут ответа на 1-й вопрос</h3>
-                    {queue_first if queue_first else '<div class="text-xs text-gray-500 py-2">Нет лидов</div>'}
+                    {queue_first if queue_first else '<div class="text-xs text-gray-500 py-4 text-center">Нет лидов</div>'}
                 </div>
-                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
+
+                <div id="qsec-refusal" class="hidden bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
                     <h3 class="text-xs font-bold text-red-400 mb-2">❌ Полные отказы</h3>
-                    {queue_refusal if queue_refusal else '<div class="text-xs text-gray-500 py-2">Нет отказов</div>'}
+                    {queue_refusal if queue_refusal else '<div class="text-xs text-gray-500 py-4 text-center">Нет отказов</div>'}
                 </div>
             </div>
 
-            <!-- 4. СТАТИСТИКА БОТА ПО ДНЯМ -->
+            <!-- 4. СТАТИСТИКА -->
             <div id="subtab-stats" class="hidden">
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
                     <h3 class="text-xs font-bold text-gray-300 mb-3">📊 Статистика по дням</h3>
@@ -721,6 +729,19 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                     document.getElementById('subtab-' + tab).classList.remove('hidden');
                     document.getElementById('subtab-btn-' + tab).className = 'flex-1 py-2 text-center text-xs font-bold rounded-xl bg-emerald-500 text-gray-950';
                 }}
+
+                function switchQueueTab(q) {{
+                    ['waiting', 'first', 'refusal'].forEach(item => {{
+                        document.getElementById('qsec-' + item).classList.add('hidden');
+                        document.getElementById('qbtn-' + item).className = 'flex-1 py-1.5 text-center text-[11px] font-semibold rounded-lg text-gray-400 hover:text-white';
+                    }});
+                    document.getElementById('qsec-' + q).classList.remove('hidden');
+                    let activeClass = 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
+                    if (q === 'first') activeClass = 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+                    if (q === 'refusal') activeClass = 'bg-red-500/20 text-red-400 border border-red-500/30';
+                    document.getElementById('qbtn-' + q).className = 'flex-1 py-1.5 text-center text-[11px] font-bold rounded-lg ' + activeClass;
+                }}
+
                 function openEditModal() {{ document.getElementById('editModal').classList.remove('hidden'); document.getElementById('editModal').classList.add('flex'); }}
                 function closeEditModal() {{ document.getElementById('editModal').classList.add('hidden'); document.getElementById('editModal').classList.remove('flex'); }}
             </script>
