@@ -374,21 +374,26 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
         bots_cards = ""
         for b in g_bots:
             avatar = b['owner_avatar'] if b['owner_avatar'] else '/static/avatars/default.png'
+            b_id = b['id']
+            b_name = b['name']
+            b_owner_name = b['owner_name']
+            b_owner_username = b['owner_username']
+            b_token = b['token']
             bots_cards += f"""
             <div class="bg-gray-900 border border-gray-800 hover:border-emerald-500/50 rounded-2xl p-4 shadow-lg mb-3 flex items-center justify-between transition">
-                <a href="/bot/{b['id']}" class="flex items-center gap-3 flex-grow">
+                <a href="/bot/{b_id}" class="flex items-center gap-3 flex-grow">
                     <img src="{avatar}" class="w-10 h-10 rounded-xl object-cover border border-gray-700">
                     <div>
                         <div class="flex items-center gap-2">
-                            <h3 class="font-semibold text-white text-sm">{b['name']}</h3>
+                            <h3 class="font-semibold text-white text-sm">{b_name}</h3>
                             <span class="text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-lg">Активен</span>
                         </div>
-                        <div class="text-[11px] text-gray-400">{b['owner_name']} ({b['owner_username']})</div>
-                        <div class="text-[10px] text-gray-500 font-mono mt-0.5 truncate max-w-[200px]">Token: {b['token']}</div>
+                        <div class="text-[11px] text-gray-400">{b_owner_name} ({b_owner_username})</div>
+                        <div class="text-[10px] text-gray-500 font-mono mt-0.5 truncate max-w-[200px]">Token: {b_token}</div>
                     </div>
                 </a>
                 <form action="/move-to-group" method="POST" class="ml-2">
-                    <input type="hidden" name="bot_id" value="{b['id']}">
+                    <input type="hidden" name="bot_id" value="{b_id}">
                     <input type="hidden" name="target_group" value="Общие">
                     {'<button type="submit" class="text-xs text-gray-500 hover:text-red-400 p-1" title="Сбросить в Общие">❌</button>' if group_name != 'Общие' else ''}
                 </form>
@@ -405,10 +410,12 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
 
     tiktok_rows_html = ""
     for link in tiktok_links:
+        l_url = link['url']
+        l_date = link['created_at']
         tiktok_rows_html += f"""
         <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 mb-2 flex justify-between items-center text-xs">
-            <span class="text-emerald-400 font-mono truncate max-w-[240px]">{link['url']}</span>
-            <span class="text-[10px] text-gray-500">{link['created_at']}</span>
+            <span class="text-emerald-400 font-mono truncate max-w-[240px]">{l_url}</span>
+            <span class="text-[10px] text-gray-500">{l_date}</span>
         </div>
         """
     if not tiktok_links:
@@ -611,21 +618,30 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
     leads = cursor.fetchall()
     conn.close()
 
+    bot_name = bot['name']
+    bot_group = bot['group_name']
+    owner_name = bot['owner_name']
+    owner_username = bot['owner_username']
+    bot_token = bot['token']
     avatar = bot['owner_avatar'] if bot['owner_avatar'] else '/static/avatars/default.png'
 
     logs_rows = ""
     for l in logs:
+        l_username = l['lead_username'] or f"id_{l['lead_id']}"
+        l_status_code = l['status_code']
+        l_status_text = l['status_text']
+        l_updated_at = l['updated_at']
         badge_color = "text-emerald-400 bg-emerald-500/10" if l['is_final_link'] else "text-amber-400 bg-amber-500/10"
         logs_rows += f"""
         <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 mb-2 text-xs flex justify-between items-center">
             <div>
                 <div class="font-bold text-white flex items-center gap-2">
-                    <span>@{l['lead_username'] or 'id_'+l['lead_id']}</span>
-                    <span class="text-[10px] px-2 py-0.5 rounded-lg {badge_color}">{l['status_code']}</span>
+                    <span>@{l_username}</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded-lg {badge_color}">{l_status_code}</span>
                 </div>
-                <div class="text-gray-400 mt-0.5">{l['status_text']}</div>
+                <div class="text-gray-400 mt-0.5">{l_status_text}</div>
             </div>
-            <div class="text-[10px] text-gray-500">{l['updated_at']}</div>
+            <div class="text-[10px] text-gray-500">{l_updated_at}</div>
         </div>
         """
     if not logs:
@@ -633,19 +649,22 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
 
     leads_rows = ""
     for lead in leads:
+        lead_uname = lead['lead_username'] or f"id_{lead['lead_id']}"
+        lead_st_text = lead['status_text']
+        lead_date = lead['updated_at']
         st_badge = '<span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-lg">Ссылка отправлена</span>' if lead['is_final_link'] else '<span class="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-lg">В процессе / Ожидание</span>'
-        if "отказ" in lead['status_text'].lower():
+        if "отказ" in lead_st_text.lower():
             st_badge = '<span class="text-[10px] bg-red-500/10 text-red-400 px-2 py-0.5 rounded-lg">Отказ</span>'
             
         leads_rows += f"""
         <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 mb-2 flex justify-between items-center text-xs">
             <div>
-                <div class="font-bold text-emerald-400">@{lead['lead_username'] or 'id_'+lead['lead_id']}</div>
-                <div class="text-gray-400 text-[11px] mt-0.5">{lead['status_text']}</div>
+                <div class="font-bold text-emerald-400">@{lead_uname}</div>
+                <div class="text-gray-400 text-[11px] mt-0.5">{lead_st_text}</div>
             </div>
             <div class="text-right">
                 {st_badge}
-                <div class="text-[10px] text-gray-500 mt-1">{lead['updated_at']}</div>
+                <div class="text-[10px] text-gray-500 mt-1">{lead_date}</div>
             </div>
         </div>
         """
@@ -658,24 +677,24 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{bot['name']} | Управление</title>
+        <title>{bot_name} | Управление</title>
         <script src="https://cdn.tailwindcss.com"></script>
     </head>
     <body class="bg-gray-950 text-gray-100 min-h-screen p-4 pb-10 select-none">
         <div class="max-w-md mx-auto">
             <header class="flex justify-between items-center mb-4 pt-2">
                 <a href="/" class="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-gray-200 rounded-xl text-xs font-semibold border border-gray-800">← Назад</a>
-                <h1 class="text-base font-bold text-white">{bot['name']}</h1>
-                <span class="text-xs text-gray-400">{bot['group_name']}</span>
+                <h1 class="text-base font-bold text-white">{bot_name}</h1>
+                <span class="text-xs text-gray-400">{bot_group}</span>
             </header>
 
             <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl">
                 <div class="flex items-center gap-3 mb-3">
                     <img src="{avatar}" class="w-14 h-14 rounded-2xl object-cover border border-emerald-500/30">
                     <div>
-                        <h3 class="font-bold text-white text-sm">{bot['owner_name']}</h3>
-                        <p class="text-xs text-emerald-400">{bot['owner_username']}</p>
-                        <p class="text-[10px] text-gray-500 font-mono mt-1 break-all">Token: {bot['token']}</p>
+                        <h3 class="font-bold text-white text-sm">{owner_name}</h3>
+                        <p class="text-xs text-emerald-400">{owner_username}</p>
+                        <p class="text-[10px] text-gray-500 font-mono mt-1 break-all">Token: {bot_token}</p>
                     </div>
                 </div>
             </div>
@@ -692,15 +711,15 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                     <form action="/bot/{bot_id}/update" method="POST" enctype="multipart/form-data" class="space-y-3">
                         <div>
                             <label class="block text-[11px] text-gray-400 mb-1">Название бота</label>
-                            <input type="text" name="name" value="{bot['name']}" required class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500">
+                            <input type="text" name="name" value="{bot_name}" required class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500">
                         </div>
                         <div>
                             <label class="block text-[11px] text-gray-400 mb-1">Имя менеджера / Аккаунт</label>
-                            <input type="text" name="owner_name" value="{bot['owner_name']}" required class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500">
+                            <input type="text" name="owner_name" value="{owner_name}" required class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500">
                         </div>
                         <div>
                             <label class="block text-[11px] text-gray-400 mb-1">Юзернейм аккаунта (@)</label>
-                            <input type="text" name="owner_username" value="{bot['owner_username']}" required class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500">
+                            <input type="text" name="owner_username" value="{owner_username}" required class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500">
                         </div>
                         <div>
                             <label class="block text-[11px] text-gray-400 mb-1">Аватарка аккаунта (выберите файл)</label>
@@ -753,7 +772,7 @@ async def update_bot_profile(bot_id: int, name: str = Form(...), owner_name: str
         real_path = f"static/avatars/{filename}"
         with open(real_path, "wb") as buffer:
             shutil.copyfileobj(avatar.file, buffer)
-        avatar_path = f"/{real_path}"
+        avatar_path = f"/static/avatars/{filename}"
 
     if avatar_path:
         cursor.execute("UPDATE bots SET name = ?, owner_name = ?, owner_username = ?, owner_avatar = ? WHERE id = ?", (name, owner_name, owner_username, avatar_path, bot_id))
