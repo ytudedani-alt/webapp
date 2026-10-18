@@ -501,18 +501,15 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
         conn.close()
         return RedirectResponse(url="/", status_code=303)
 
-    # Логи действий бота
     cursor.execute("SELECT * FROM bot_logs WHERE bot_id = ? ORDER BY updated_at DESC LIMIT 50", (bot_id,))
     logs = cursor.fetchall()
 
-    # Уникальные лиды для Юзов
     cursor.execute("""
         SELECT lead_id, lead_username, status_text, timer_sec, is_final_link, status_code, max(updated_at) as updated_at 
         FROM bot_logs WHERE bot_id = ? GROUP BY lead_id ORDER BY updated_at DESC
     """, (bot_id,))
     leads = cursor.fetchall()
 
-    # Личная статистика бота по дням
     cursor.execute("""
         SELECT date(updated_at) as d, COUNT(DISTINCT lead_id) as cnt, COALESCE(SUM(is_final_link), 0) as links
         FROM bot_logs WHERE bot_id = ? GROUP BY date(updated_at) ORDER BY d DESC LIMIT 7
@@ -527,7 +524,6 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
     bot_token = bot['token']
     avatar = bot['owner_avatar'] if bot['owner_avatar'] else '/static/avatars/default.png'
 
-    # Раздел 2: Логи
     logs_rows = ""
     for l in logs:
         l_username = l['lead_username'] or f"id_{l['lead_id']}"
@@ -542,7 +538,6 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
     if not logs:
         logs_rows = '<div class="text-center py-6 text-xs text-gray-500">Логов пока нет</div>'
 
-    # Раздел 1: Юзы
     leads_rows = ""
     for lead in leads:
         lead_uname = lead['lead_username'] or f"id_{lead['lead_id']}"
@@ -567,7 +562,7 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
     if not leads:
         leads_rows = '<div class="text-center py-6 text-xs text-gray-500">Нет пользователей</div>'
 
-    # Раздел 3: Очередь (фильтруем строго ожидание отправки ссылки, ожидание 1 вопроса и отказы)
+    # Раздел 3: Очередь (строго разделенная по подвкладкам: Ожидание ссылки, 1-й вопрос, Отказы)
     queue_waiting, queue_first, queue_refusal = "", "", ""
     for lead in leads:
         lead_uname = lead['lead_username'] or f"id_{lead['lead_id']}"
@@ -586,12 +581,11 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
             continue
         elif "отказ" in st_text or "игнор" in st_text:
             queue_refusal += card
-        elif "ссылк" in st_text or "ожидание" in st_text and ("ч." in st_text or "мин" in st_text or "сек" in st_text or lead['timer_sec'] > 0):
+        elif "ч." in st_text or "мин" in st_text or "сек" in st_text or "ожидание" in st_text or lead['timer_sec'] > 0:
             queue_waiting += card
         else:
             queue_first += card
 
-    # Раздел 4: Статистика по дням
     stats_rows = ""
     for row in bot_stats_days:
         stats_rows += f"""
@@ -621,7 +615,6 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                 <span class="text-xs text-gray-400">{bot_group}</span>
             </header>
 
-            <!-- ШАПКА -->
             <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 shadow-xl flex items-center justify-between">
                 <div class="flex items-center gap-3">
                     <img src="{avatar}" class="w-12 h-12 rounded-xl object-cover border border-emerald-500/30">
@@ -659,27 +652,27 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                 </div>
             </div>
 
-            <!-- 3. ОЧЕРЕДЬ (С МИНИ-ПОДВКЛАДКАМИ) -->
-            <div id="subtab-queue" class="hidden space-y-4">
+            <!-- 3. ОЧЕРЕДЬ (РАЗДЕЛЕННАЯ ПО КНОПКАМ-ПОДВКЛАДКАМ) -->
+            <div id="subtab-queue" class="hidden space-y-3">
                 <div class="flex bg-gray-900 border border-gray-800 rounded-xl p-1 gap-1">
-                    <button onclick="switchQueueTab('waiting')" id="qbtn-waiting" class="flex-1 py-1.5 text-center text-[11px] font-bold rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">⏳ Ожидание ссылки</button>
-                    <button onclick="switchQueueTab('first')" id="qbtn-first" class="flex-1 py-1.5 text-center text-[11px] font-semibold rounded-lg text-gray-400 hover:text-white">💬 1-й вопрос</button>
-                    <button onclick="switchQueueTab('refusal')" id="qbtn-refusal" class="flex-1 py-1.5 text-center text-[11px] font-semibold rounded-lg text-gray-400 hover:text-white">❌ Отказы</button>
+                    <button onclick="switchQueueTab('waiting')" id="qbtn-waiting" class="flex-1 py-2 text-center text-[11px] font-bold rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">⏳ Ожидание ссылки</button>
+                    <button onclick="switchQueueTab('first')" id="qbtn-first" class="flex-1 py-2 text-center text-[11px] font-semibold rounded-lg text-gray-400 hover:text-white">💬 1-й вопрос</button>
+                    <button onclick="switchQueueTab('refusal')" id="qbtn-refusal" class="flex-1 py-2 text-center text-[11px] font-semibold rounded-lg text-gray-400 hover:text-white">❌ Отказы</button>
                 </div>
 
                 <div id="qsec-waiting" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
-                    <h3 class="text-xs font-bold text-amber-400 mb-2">⏳ Ожидают отправки ссылки</h3>
-                    {queue_waiting if queue_waiting else '<div class="text-xs text-gray-500 py-4 text-center">Нет лидов в ожидании ссылки</div>'}
+                    <h3 class="text-xs font-bold text-amber-400 mb-3">⏳ Ожидают отправки конечной ссылки</h3>
+                    {queue_waiting if queue_waiting else '<div class="text-xs text-gray-500 py-6 text-center">Нет лидов в ожидании ссылки</div>'}
                 </div>
 
                 <div id="qsec-first" class="hidden bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
-                    <h3 class="text-xs font-bold text-blue-400 mb-2">💬 Ждут ответа на 1-й вопрос</h3>
-                    {queue_first if queue_first else '<div class="text-xs text-gray-500 py-4 text-center">Нет лидов</div>'}
+                    <h3 class="text-xs font-bold text-blue-400 mb-3">💬 Ждут ответа на 1-й вопрос</h3>
+                    {queue_first if queue_first else '<div class="text-xs text-gray-500 py-6 text-center">Нет лидов</div>'}
                 </div>
 
                 <div id="qsec-refusal" class="hidden bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
-                    <h3 class="text-xs font-bold text-red-400 mb-2">❌ Полные отказы</h3>
-                    {queue_refusal if queue_refusal else '<div class="text-xs text-gray-500 py-4 text-center">Нет отказов</div>'}
+                    <h3 class="text-xs font-bold text-red-400 mb-3">❌ Полные отказы</h3>
+                    {queue_refusal if queue_refusal else '<div class="text-xs text-gray-500 py-6 text-center">Нет отказов</div>'}
                 </div>
             </div>
 
@@ -733,13 +726,15 @@ async def bot_detail_page(request: Request, bot_id: int, gogoha_strict_session: 
                 function switchQueueTab(q) {{
                     ['waiting', 'first', 'refusal'].forEach(item => {{
                         document.getElementById('qsec-' + item).classList.add('hidden');
-                        document.getElementById('qbtn-' + item).className = 'flex-1 py-1.5 text-center text-[11px] font-semibold rounded-lg text-gray-400 hover:text-white';
+                        document.getElementById('qbtn-' + item).className = 'flex-1 py-2 text-center text-[11px] font-semibold rounded-lg text-gray-400 hover:text-white';
                     }});
                     document.getElementById('qsec-' + q).classList.remove('hidden');
+                    
                     let activeClass = 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
                     if (q === 'first') activeClass = 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
                     if (q === 'refusal') activeClass = 'bg-red-500/20 text-red-400 border border-red-500/30';
-                    document.getElementById('qbtn-' + q).className = 'flex-1 py-1.5 text-center text-[11px] font-bold rounded-lg ' + activeClass;
+                    
+                    document.getElementById('qbtn-' + q).className = 'flex-1 py-2 text-center text-[11px] font-bold rounded-lg ' + activeClass;
                 }}
 
                 function openEditModal() {{ document.getElementById('editModal').classList.remove('hidden'); document.getElementById('editModal').classList.add('flex'); }}
