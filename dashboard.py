@@ -306,7 +306,7 @@ async def logout():
     return response
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None), filter: str = "all"):
+async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None), filter_target: str = "all"):
     if gogoha_strict_session != "active_valid_session":
         return RedirectResponse(url="/login", status_code=303)
 
@@ -316,11 +316,11 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
     bots = cursor.fetchall()
     
     today_str = datetime.now().strftime("%Y-%m-%d")
-    if filter.startswith("bot_"):
-        b_id = filter.split("_")[1]
+    if filter_target.startswith("bot_"):
+        b_id = filter_target.split("_")[1]
         cursor.execute("SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE bot_id = ? AND date(updated_at) = ?", (b_id, today_str))
-    elif filter.startswith("group_"):
-        g_name = filter.split("_")[1]
+    elif filter_target.startswith("group_"):
+        g_name = filter_target.split("_")[1]
         cursor.execute("""
             SELECT COUNT(DISTINCT l.lead_id), COALESCE(SUM(l.is_final_link), 0) 
             FROM bot_logs l JOIN bots b ON l.bot_id = b.id 
@@ -338,9 +338,9 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
         d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         chart_labels.append((datetime.now() - timedelta(days=i)).strftime("%d.%m"))
         
-        if filter.startswith("bot_"):
+        if filter_target.startswith("bot_"):
             cursor.execute("SELECT COUNT(DISTINCT lead_id), COALESCE(SUM(is_final_link), 0) FROM bot_logs WHERE bot_id = ? AND date(updated_at) = ?", (b_id, d))
-        elif filter.startswith("group_"):
+        elif filter_target.startswith("group_"):
             cursor.execute("""
                 SELECT COUNT(DISTINCT l.lead_id), COALESCE(SUM(l.is_final_link), 0) 
                 FROM bot_logs l JOIN bots b ON l.bot_id = b.id 
@@ -363,11 +363,11 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
         if group not in groups: groups[group] = []
         groups[group].append(bot)
 
-    filter_options = '<option value="all" ' + ('selected' if filter=='all' else '') + '>🌐 Вся система (Все боты)</option>'
+    filter_options = '<option value="all" ' + ('selected' if filter_target=='all' else '') + '>🌐 Вся система (Все боты)</option>'
     for g_name in groups.keys():
-        filter_options += f'<option value="group_{g_name}" ' + ('selected' if filter==f'group_{g_name}' else '') + f'>📁 Папка: {g_name}</option>'
+        filter_options += f'<option value="group_{g_name}" ' + ('selected' if filter_target==f'group_{g_name}' else '') + f'>📁 Папка: {g_name}</option>'
     for bot in bots:
-        filter_options += f'<option value="bot_{bot["id"]}" ' + ('selected' if filter==f'bot_{bot["id"]}' else '') + f'>🤖 Бот: {bot["name"]}</option>'
+        filter_options += f'<option value="bot_{bot["id"]}" ' + ('selected' if filter_target==f'bot_{bot["id"]}' else '') + f'>🤖 Бот: {bot["name"]}</option>'
 
     groups_html = ""
     for group_name, g_bots in groups.items():
@@ -552,7 +552,7 @@ async def dashboard(request: Request, gogoha_strict_session: str = Cookie(None),
                 }}
 
                 function changeFilter(val) {{
-                    window.location.href = "/?filter=" + val;
+                    window.location.href = "/?filter_target=" + val;
                 }}
 
                 async function fetchServerStatus() {{
